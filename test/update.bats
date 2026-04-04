@@ -69,6 +69,28 @@ setup() {
   [[ "$output" == *"second"*"updated"* ]]
 }
 
+@test "update works after init (detached HEAD)" {
+  modules add "$REMOTE" --name my-repo
+  git -C "$PARENT" commit -m "add module"
+
+  local hash
+  hash="$(hash_name "my-repo")"
+
+  # Simulate fresh clone: remove the clone, re-init (which detaches HEAD)
+  rm -rf "$PARENT/submodules/$hash"
+  modules init
+
+  # Push a new commit to the remote
+  echo "new stuff" > "$REMOTE/new.md"
+  git -C "$REMOTE" add new.md
+  git -C "$REMOTE" commit -m "new commit"
+
+  # Update should succeed despite detached HEAD from init
+  run modules update my-repo
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"updated"* ]]
+}
+
 @test "update fails for unknown module" {
   run modules update nonexistent
   [ "$status" -ne 0 ]

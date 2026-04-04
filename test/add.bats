@@ -112,6 +112,12 @@ setup() {
   [[ "$output" == *"already exists"* ]]
 }
 
+@test "add fails with invalid URL" {
+  run modules add "file:///nonexistent/repo.git" --name bad-repo
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"clone"* || "$output" == *"fail"* || "$output" == *"fatal"* ]]
+}
+
 @test "add fails if not initialized" {
   local bare="$BATS_TEST_TMPDIR/bare"
   create_parent_repo "$bare"
