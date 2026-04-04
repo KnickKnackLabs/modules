@@ -30,10 +30,15 @@ fi
 HOOKS_SRC="$MISE_CONFIG_ROOT/hooks"
 HOOKS_DST="$TARGET_DIR/.git/hooks"
 
-# Install dispatcher (preserve existing pre-commit.d hooks)
-cp "$HOOKS_SRC/dispatcher" "$HOOKS_DST/pre-commit"
-chmod +x "$HOOKS_DST/pre-commit"
+# Install dispatcher only if no pre-commit hook exists yet.
+# If one exists, assume it already dispatches to pre-commit.d/ (or the
+# user has their own setup — either way, don't clobber it).
+if [ ! -x "$HOOKS_DST/pre-commit" ]; then
+  cp "$HOOKS_SRC/dispatcher" "$HOOKS_DST/pre-commit"
+  chmod +x "$HOOKS_DST/pre-commit"
+fi
 
+# Add our hooks to pre-commit.d/ — never remove existing hooks.
 mkdir -p "$HOOKS_DST/pre-commit.d"
 for hook in gitmodules-guard path-obfuscation manifest-encryption; do
   cp "$HOOKS_SRC/$hook" "$HOOKS_DST/pre-commit.d/$hook"

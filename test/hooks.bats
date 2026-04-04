@@ -23,6 +23,35 @@ setup() {
   [ -x "$PARENT/.git/hooks/pre-commit" ]
 }
 
+@test "setup preserves existing pre-commit hook" {
+  # Simulate a repo that already has a pre-commit dispatcher with a custom hook
+  local fresh="$BATS_TEST_TMPDIR/fresh"
+  create_parent_repo "$fresh"
+  mkdir -p "$fresh/.git/hooks/pre-commit.d"
+  cat > "$fresh/.git/hooks/pre-commit" <<'DISPATCH'
+#!/usr/bin/env bash
+for hook in "$(dirname "$0")/pre-commit.d"/*; do
+  [ -x "$hook" ] && "$hook" || exit $?
+done
+DISPATCH
+  chmod +x "$fresh/.git/hooks/pre-commit"
+  cat > "$fresh/.git/hooks/pre-commit.d/existing-hook" <<'HOOK'
+#!/usr/bin/env bash
+echo "existing hook ran"
+HOOK
+  chmod +x "$fresh/.git/hooks/pre-commit.d/existing-hook"
+
+  export CALLER_PWD="$fresh"
+  modules setup
+
+  # Existing hook should still be there
+  [ -x "$fresh/.git/hooks/pre-commit.d/existing-hook" ]
+  # Modules hooks should also be installed
+  [ -x "$fresh/.git/hooks/pre-commit.d/gitmodules-guard" ]
+  [ -x "$fresh/.git/hooks/pre-commit.d/path-obfuscation" ]
+  [ -x "$fresh/.git/hooks/pre-commit.d/manifest-encryption" ]
+}
+
 @test "setup installs all three hooks" {
   [ -x "$PARENT/.git/hooks/pre-commit.d/manifest-encryption" ]
   [ -x "$PARENT/.git/hooks/pre-commit.d/path-obfuscation" ]
