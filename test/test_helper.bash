@@ -64,17 +64,9 @@ skip_unless_gpg_key() {
   export TEST_GPG_FINGERPRINT="$fpr"
 }
 
-# Generate the same obfuscated hash as the modules tool.
-# Must match lib/common.sh hash_name().
-hash_name() {
-  if command -v shasum &>/dev/null; then
-    printf '%s' "$1" | shasum | cut -c1-12
-  elif command -v sha1sum &>/dev/null; then
-    printf '%s' "$1" | sha1sum | cut -c1-12
-  else
-    printf '%s' "$1" | openssl dgst -sha1 | awk '{print $NF}' | cut -c1-12
-  fi
-}
+# Import hash_name from common.sh — single source of truth.
+# shellcheck source=../lib/common.sh
+source "$REPO_DIR/lib/common.sh"
 export -f hash_name
 
 # Get the gitlink mode and SHA for a path in the parent's index.

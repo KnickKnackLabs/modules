@@ -43,7 +43,10 @@ update_module() {
         return 1
       fi
     fi
-    git -C "$mod_path" checkout "$default_branch" 2>&1
+    if ! git -C "$mod_path" checkout -q "$default_branch" 2>&1; then
+      echo "  $name: failed to checkout $default_branch" >&2
+      return 1
+    fi
   fi
 
   git -C "$mod_path" pull --ff-only 2>&1
