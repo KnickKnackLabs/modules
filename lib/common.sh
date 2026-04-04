@@ -40,7 +40,13 @@ require_jq() {
 # Generate an obfuscated directory name from a module name.
 # Uses first 12 chars of SHA-1 hash.
 hash_name() {
-  printf '%s' "$1" | shasum | cut -c1-12
+  if command -v shasum &>/dev/null; then
+    printf '%s' "$1" | shasum | cut -c1-12
+  elif command -v sha1sum &>/dev/null; then
+    printf '%s' "$1" | sha1sum | cut -c1-12
+  else
+    printf '%s' "$1" | openssl dgst -sha1 | awk '{print $NF}' | cut -c1-12
+  fi
 }
 
 # ── Manifest operations ──────────────────────────────────────

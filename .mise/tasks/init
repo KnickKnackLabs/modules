@@ -19,7 +19,6 @@ fi
 
 errors=0
 
-echo "$manifest" | jq -r 'to_entries[] | "\(.key)\t\(.value.url)\t\(.value.path)\t\(.value.pin)"' | \
 while IFS=$'\t' read -r name url path pin; do
   mod_path="$TARGET_DIR/$path"
 
@@ -48,7 +47,7 @@ while IFS=$'\t' read -r name url path pin; do
   if [ "$actual" != "$pin" ]; then
     echo "  $name: warning — expected $pin, at $actual" >&2
   fi
-done
+done < <(echo "$manifest" | jq -r 'to_entries[] | "\(.key)\t\(.value.url)\t\(.value.path)\t\(.value.pin)"')
 
 if [ "$errors" -gt 0 ]; then
   echo "$errors module(s) failed to initialize" >&2

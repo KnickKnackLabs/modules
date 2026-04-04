@@ -27,6 +27,25 @@ update_module() {
   fi
 
   echo "  $name: pulling..."
+
+  # If HEAD is detached (e.g., after init), checkout the default branch first
+  if ! git -C "$mod_path" symbolic-ref -q HEAD &>/dev/null; then
+    local default_branch
+    default_branch="$(git -C "$mod_path" rev-parse --abbrev-ref origin/HEAD 2>/dev/null | sed 's|^origin/||')"
+    if [ -z "$default_branch" ] || [ "$default_branch" = "HEAD" ]; then
+      # Fallback: try main, then master
+      if git -C "$mod_path" show-ref --verify --quiet refs/remotes/origin/main; then
+        default_branch="main"
+      elif git -C "$mod_path" show-ref --verify --quiet refs/remotes/origin/master; then
+        default_branch="master"
+      else
+        echo "  $name: cannot determine default branch" >&2
+        return 1
+      fi
+    fi
+    git -C "$mod_path" checkout "$default_branch" 2>&1
+  fi
+
   git -C "$mod_path" pull --ff-only 2>&1
 
   local new_pin
@@ -44,7 +63,7 @@ update_module() {
 if [ -n "${usage_name:-}" ]; then
   update_module "$usage_name"
 else
-  manifest_names | while IFS= read -r name; do
+  while IFS= read -r name; do
     update_module "$name" || true
-  done
+  done < <(manifest_names)
 fi

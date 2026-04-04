@@ -56,7 +56,13 @@ skip_unless_git_crypt() {
 # Generate the same obfuscated hash as the modules tool.
 # Must match lib/common.sh hash_name().
 hash_name() {
-  printf '%s' "$1" | shasum | cut -c1-12
+  if command -v shasum &>/dev/null; then
+    printf '%s' "$1" | shasum | cut -c1-12
+  elif command -v sha1sum &>/dev/null; then
+    printf '%s' "$1" | sha1sum | cut -c1-12
+  else
+    printf '%s' "$1" | openssl dgst -sha1 | awk '{print $NF}' | cut -c1-12
+  fi
 }
 export -f hash_name
 
