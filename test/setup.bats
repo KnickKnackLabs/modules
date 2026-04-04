@@ -25,11 +25,14 @@ setup() {
   [[ "$output" == *"submodules/.manifest"* ]]
 }
 
-@test "setup fails if already initialized" {
+@test "setup is re-entrant" {
   modules setup
   run modules setup
-  [ "$status" -eq 1 ]
-  [[ "$output" == *"Already initialized"* ]]
+  [ "$status" -eq 0 ]
+  # Manifest should still exist and be valid
+  [ -f "$PARENT/submodules/.manifest" ]
+  # Hooks should still be installed
+  [ -x "$PARENT/.git/hooks/pre-commit" ]
 }
 
 @test "setup fails outside a git repo" {

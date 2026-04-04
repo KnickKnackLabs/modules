@@ -16,17 +16,27 @@ setup() {
   export CALLER_PWD="$PARENT"
 }
 
-# Helper: run rudi in the parent repo context
-rudi_in_parent() {
-  cd "$MISE_CONFIG_ROOT" && CALLER_PWD="$PARENT" mise run -q "$@"
+# Helper: init rudi in the parent repo, then run modules setup
+setup_with_encryption() {
+  cd "$MISE_CONFIG_ROOT" && CALLER_PWD="$PARENT" mise run -q rudi:init --user "$TEST_GPG_FINGERPRINT" --no-user 2>/dev/null || \
+    CALLER_PWD="$PARENT" rudi init --user "$TEST_GPG_FINGERPRINT" 2>/dev/null || true
+  # If rudi isn't available as a mise task, use git-crypt directly
+  if [ ! -d "$PARENT/.git/git-crypt" ]; then
+    cd "$PARENT" && git-crypt init
+    git-crypt add-gpg-user --trusted "$TEST_GPG_FINGERPRINT"
+  fi
+  export CALLER_PWD="$PARENT"
+  modules setup
 }
 
-@test "roundtrip: setup with --gpg-key initializes encryption" {
-  run modules setup --gpg-key "$TEST_GPG_FINGERPRINT"
-  [ "$status" -eq 0 ]
+@test "roundtrip: setup auto-detects encryption and assigns manifest" {
+  # Init encryption first via rudi/git-crypt
+  cd "$PARENT" && git-crypt init
+  git-crypt add-gpg-user --trusted "$TEST_GPG_FINGERPRINT"
 
-  # git-crypt should be initialized
-  [ -d "$PARENT/.git/git-crypt" ]
+  export CALLER_PWD="$PARENT"
+  run modules setup
+  [ "$status" -eq 0 ]
 
   # .manifest should be assigned for encryption
   run git -C "$PARENT" check-attr filter submodules/.manifest
@@ -34,23 +44,29 @@ rudi_in_parent() {
 }
 
 @test "roundtrip: manifest is encrypted after lock" {
-  modules setup --gpg-key "$TEST_GPG_FINGERPRINT"
+  cd "$PARENT" && git-crypt init
+  git-crypt add-gpg-user --trusted "$TEST_GPG_FINGERPRINT"
+
+  export CALLER_PWD="$PARENT"
+  modules setup
   git -C "$PARENT" commit -m "init modules"
 
   modules add "$REMOTE" --name my-repo
   git -C "$PARENT" commit -m "add module"
 
-  # Lock — rudi needs to run in the parent repo
   cd "$PARENT" && git-crypt lock
 
-  # Manifest should be binary (encrypted)
   run file "$PARENT/submodules/.manifest"
   [[ "$output" != *"JSON"* ]]
   [[ "$output" != *"ASCII"* ]]
 }
 
 @test "roundtrip: fresh clone → unlock → init restores modules" {
-  modules setup --gpg-key "$TEST_GPG_FINGERPRINT"
+  cd "$PARENT" && git-crypt init
+  git-crypt add-gpg-user --trusted "$TEST_GPG_FINGERPRINT"
+
+  export CALLER_PWD="$PARENT"
+  modules setup
   git -C "$PARENT" commit -m "init modules"
 
   modules add "$REMOTE" --name my-repo
@@ -60,17 +76,13 @@ rudi_in_parent() {
   hash="$(hash_name "my-repo")"
   pin="$(jq -r '.["my-repo"].pin' "$PARENT/submodules/.manifest")"
 
-  # Clone the parent (simulates fresh checkout)
   local clone="$BATS_TEST_TMPDIR/clone"
   git clone "$PARENT" "$clone"
 
-  # Submodule dir should be empty after clone
   [ ! -d "$clone/submodules/$hash/.git" ]
 
-  # Unlock
   cd "$clone" && git-crypt unlock
 
-  # Init should restore the module
   export CALLER_PWD="$clone"
   modules init
 

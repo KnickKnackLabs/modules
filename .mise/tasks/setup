@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Initialize modules in the current repo"
 #MISE dir="{{config_root}}"
-#USAGE flag "--gpg-key <fingerprint>" help="GPG fingerprint to initialize encryption"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/common.sh"
@@ -9,26 +8,21 @@ source "$MISE_CONFIG_ROOT/lib/common.sh"
 require_git
 require_jq
 
-if [ -f "$MANIFEST" ]; then
-  echo "Already initialized — manifest exists at submodules/.manifest" >&2
-  exit 1
+# ── Re-entrant: skip manifest creation if already initialized ──
+
+if [ ! -f "$MANIFEST" ]; then
+  mkdir -p "$SUBMODULES_DIR"
+  echo '{}' > "$MANIFEST"
 fi
 
-# Create the submodules directory and empty manifest
-mkdir -p "$SUBMODULES_DIR"
-echo '{}' > "$MANIFEST"
+# ── Encryption: auto-detect via rudi ───────────────────────────
 
-# ── Encryption (optional) ─────────────────────────────────────
-
-if [ -n "${usage_gpg_key:-}" ]; then
-  # Initialize encryption via rudi (idempotent — safe on repos with existing git-crypt)
-  cd "$TARGET_DIR"
-  CALLER_PWD="$TARGET_DIR" rudi init
-  CALLER_PWD="$TARGET_DIR" rudi assign 'submodules/.manifest'
-  CALLER_PWD="$TARGET_DIR" rudi add-user "$usage_gpg_key"
-  git -C "$TARGET_DIR" add .gitattributes
-
-  echo "  encryption: enabled (rudi)"
+if command -v rudi &>/dev/null; then
+  rudi_status="$(cd "$TARGET_DIR" && rudi status --json 2>/dev/null || echo '{}')" 
+  if echo "$rudi_status" | jq -e '.initialized == true' &>/dev/null; then
+    (cd "$TARGET_DIR" && rudi assign 'submodules/.manifest')
+    echo "  encryption: manifest assigned to git-crypt"
+  fi
 fi
 
 # ── Pre-commit hooks ──────────────────────────────────────────
@@ -36,11 +30,10 @@ fi
 HOOKS_SRC="$MISE_CONFIG_ROOT/hooks"
 HOOKS_DST="$TARGET_DIR/.git/hooks"
 
-# Install dispatcher
+# Install dispatcher (preserve existing pre-commit.d hooks)
 cp "$HOOKS_SRC/dispatcher" "$HOOKS_DST/pre-commit"
 chmod +x "$HOOKS_DST/pre-commit"
 
-# Install individual hooks
 mkdir -p "$HOOKS_DST/pre-commit.d"
 for hook in gitmodules-guard path-obfuscation manifest-encryption; do
   cp "$HOOKS_SRC/$hook" "$HOOKS_DST/pre-commit.d/$hook"
@@ -53,6 +46,3 @@ git -C "$TARGET_DIR" add "$MANIFEST"
 echo "Initialized modules in $TARGET_DIR"
 echo "  manifest: submodules/.manifest"
 echo "  hooks: pre-commit dispatcher + 3 guards"
-if [ -n "${usage_gpg_key:-}" ]; then
-  echo "  encryption: enabled"
-fi
