@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Warn/block when the manifest is committed in plaintext.
+# Requires git-crypt to be initialized; warns and passes if not available.
+set -eo pipefail
+
+# Only check if the manifest is being staged
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -qx 'submodules/\.manifest'; then
+  exit 0
+fi
+
+if ! command -v git-crypt &>/dev/null; then
+  echo "WARNING: git-crypt not found — cannot verify manifest encryption" >&2
+  exit 0
+fi
+
+# If git-crypt isn't initialized in this repo, warn but don't block
+if [ ! -d ".git/git-crypt" ]; then
+  echo "WARNING: git-crypt not initialized — manifest will be committed in plaintext" >&2
+  echo "Run 'modules setup --gpg-key <fingerprint>' to enable encryption." >&2
+  exit 0
+fi
+
+# Check if the manifest is encrypted via the git-crypt filter
+if git-crypt status submodules/.manifest 2>&1 | grep -q "not encrypted"; then
+  echo "ERROR: submodules/.manifest is staged in plaintext but should be encrypted." >&2
+  echo "Run 'rudi unlock' if git-crypt is locked, then re-stage." >&2
+  exit 1
+fi

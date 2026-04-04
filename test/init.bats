@@ -69,6 +69,21 @@ setup() {
   [[ "$output" == *"already cloned"* ]]
 }
 
+@test "init reports failure when clone fails" {
+  # Add a module with a bogus URL directly in the manifest
+  local hash
+  hash="$(hash_name "bad-repo")"
+  local manifest
+  manifest="$(cat "$PARENT/submodules/.manifest")"
+  echo "$manifest" | jq --arg h "submodules/$hash" \
+    '. + {"bad-repo": {"url": "file:///nonexistent/repo.git", "path": $h, "pin": "0000000000000000000000000000000000000000"}}' \
+    > "$PARENT/submodules/.manifest"
+
+  run modules init
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"failed"* ]]
+}
+
 @test "init handles multiple modules" {
   local remote2="$BATS_TEST_TMPDIR/remote2"
   create_remote_repo "$remote2"

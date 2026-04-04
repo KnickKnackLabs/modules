@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Reject any commit that includes a .gitmodules file.
+# modules uses an encrypted manifest instead of .gitmodules.
+set -eo pipefail
+
+if git diff --cached --name-only --diff-filter=ACMR | grep -qx '\.gitmodules'; then
+  echo "ERROR: .gitmodules is not allowed — modules uses an encrypted manifest instead." >&2
+  echo "Remove .gitmodules and use 'modules add' to manage dependencies." >&2
+  exit 1
+fi

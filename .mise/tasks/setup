@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="Initialize modules in the current repo"
 #MISE dir="{{config_root}}"
+#USAGE flag "--gpg-key <fingerprint>" help="GPG fingerprint to initialize encryption"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/common.sh"
@@ -17,10 +18,50 @@ fi
 mkdir -p "$SUBMODULES_DIR"
 echo '{}' > "$MANIFEST"
 
+# ── Encryption (optional) ─────────────────────────────────────
+
+if [ -n "${usage_gpg_key:-}" ]; then
+  if ! command -v git-crypt &>/dev/null; then
+    echo "Error: git-crypt not found (required for --gpg-key)" >&2
+    exit 1
+  fi
+
+  # Initialize git-crypt in the target repo
+  cd "$TARGET_DIR"
+  git-crypt init
+
+  # Assign the manifest for encryption
+  echo 'submodules/.manifest filter=git-crypt diff=git-crypt' >> "$TARGET_DIR/.gitattributes"
+  git -C "$TARGET_DIR" add .gitattributes
+
+  # Add the GPG user
+  git-crypt add-gpg-user "$usage_gpg_key"
+
+  echo "  encryption: enabled (git-crypt)"
+fi
+
+# ── Pre-commit hooks ──────────────────────────────────────────
+
+HOOKS_SRC="$MISE_CONFIG_ROOT/hooks"
+HOOKS_DST="$TARGET_DIR/.git/hooks"
+
+# Install dispatcher
+cp "$HOOKS_SRC/dispatcher" "$HOOKS_DST/pre-commit"
+chmod +x "$HOOKS_DST/pre-commit"
+
+# Install individual hooks
+mkdir -p "$HOOKS_DST/pre-commit.d"
+for hook in gitmodules-guard path-obfuscation manifest-encryption; do
+  cp "$HOOKS_SRC/$hook" "$HOOKS_DST/pre-commit.d/$hook"
+  chmod +x "$HOOKS_DST/pre-commit.d/$hook"
+done
+
 # Stage the manifest
 git -C "$TARGET_DIR" add "$MANIFEST"
 
 echo "Initialized modules in $TARGET_DIR"
 echo "  manifest: submodules/.manifest"
-echo ""
-echo "Next: encrypt the manifest with git-crypt (notes setup), then add modules."
+echo "  hooks: pre-commit dispatcher + 3 guards"
+if [ -n "${usage_gpg_key:-}" ]; then
+  echo "  encryption: enabled"
+fi
