@@ -8,6 +8,16 @@ fi
 
 REPO_DIR="$MISE_CONFIG_ROOT"
 
+# Run a modules task through mise.
+modules() {
+  if [ -z "${CALLER_PWD:-}" ]; then
+    echo "CALLER_PWD not set" >&2
+    return 1
+  fi
+  cd "$MISE_CONFIG_ROOT" && CALLER_PWD="$CALLER_PWD" mise run -q "$@"
+}
+export -f modules
+
 # Create a local "remote" repo with some commits.
 # Usage: create_remote_repo <path>
 # Returns: the path, with a repo containing 2 commits.
@@ -42,6 +52,13 @@ skip_unless_git_crypt() {
     skip "git-crypt not installed"
   fi
 }
+
+# Generate the same obfuscated hash as the modules tool.
+# Must match lib/common.sh hash_name().
+hash_name() {
+  printf '%s' "$1" | shasum | cut -c1-12
+}
+export -f hash_name
 
 # Get the gitlink mode and SHA for a path in the parent's index.
 # Usage: gitlink_info <parent> <path>

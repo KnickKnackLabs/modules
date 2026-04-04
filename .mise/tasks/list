@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+#MISE description="List modules"
+#MISE dir="{{config_root}}"
+#USAGE flag "--json" help="Output as JSON"
+set -euo pipefail
+
+source "$MISE_CONFIG_ROOT/lib/common.sh"
+
+require_git
+require_jq
+require_initialized
+
+manifest="$(manifest_read)"
+
+if [ "${usage_json:-}" = "true" ]; then
+  echo "$manifest"
+  exit 0
+fi
+
+# Check if empty
+if [ "$(echo "$manifest" | jq 'length')" -eq 0 ]; then
+  echo "No modules. Use 'modules add <url>' to add one."
+  exit 0
+fi
+
+# Pretty print
+{
+  printf "Name\tURL\tPath\tPin\n"
+  echo "$manifest" | jq -r 'to_entries[] | "\(.key)\t\(.value.url)\t\(.value.path)\t\(.value.pin[:12])"'
+} | gum table --print --separator "	"

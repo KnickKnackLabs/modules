@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+#MISE description="Pull latest and update pin for module(s)"
+#MISE dir="{{config_root}}"
+#USAGE arg "[name]" help="Module name (omit to update all)"
+set -euo pipefail
+
+source "$MISE_CONFIG_ROOT/lib/common.sh"
+
+require_git
+require_jq
+require_initialized
+
+update_module() {
+  local name="$1"
+  local entry
+  entry="$(manifest_get "$name")" || { echo "Error: module '$name' not found" >&2; return 1; }
+
+  local url path pin
+  url="$(echo "$entry" | jq -r '.url')"
+  path="$(echo "$entry" | jq -r '.path')"
+  pin="$(echo "$entry" | jq -r '.pin')"
+  local mod_path="$TARGET_DIR/$path"
+
+  if [ ! -d "$mod_path/.git" ]; then
+    echo "  $name: not cloned (run: modules init)" >&2
+    return 1
+  fi
+
+  echo "  $name: pulling..."
+  git -C "$mod_path" pull --ff-only 2>&1
+
+  local new_pin
+  new_pin="$(git -C "$mod_path" rev-parse HEAD)"
+
+  if [ "$new_pin" = "$pin" ]; then
+    echo "  $name: already up to date (${pin:0:12})"
+  else
+    manifest_set "$name" "$url" "$path" "$new_pin"
+    git -C "$TARGET_DIR" add "$mod_path" "$MANIFEST"
+    echo "  $name: updated ${pin:0:12} → ${new_pin:0:12}"
+  fi
+}
+
+if [ -n "${usage_name:-}" ]; then
+  update_module "$usage_name"
+else
+  manifest_names | while IFS= read -r name; do
+    update_module "$name" || true
+  done
+fi

@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+#MISE description="Add a submodule"
+#MISE dir="{{config_root}}"
+#USAGE arg "<url>" help="Git URL of the repo to add"
+#USAGE flag "--name <name>" help="Module name (default: derived from URL)"
+#USAGE flag "--ref <ref>" help="Git ref to pin (default: HEAD)"
+set -euo pipefail
+
+source "$MISE_CONFIG_ROOT/lib/common.sh"
+
+require_git
+require_jq
+require_initialized
+
+url="$usage_url"
+
+# Derive name from URL if not provided: https://github.com/org/repo.git → repo
+if [ -n "${usage_name:-}" ]; then
+  name="$usage_name"
+else
+  name="$(basename "$url" .git)"
+fi
+
+# Check for duplicate
+if manifest_get "$name" &>/dev/null; then
+  echo "Error: module '$name' already exists" >&2
+  exit 1
+fi
+
+# Generate obfuscated path
+hash="$(hash_name "$name")"
+mod_path="$SUBMODULES_DIR/$hash"
+
+if [ -d "$mod_path" ]; then
+  echo "Error: directory already exists: submodules/$hash" >&2
+  exit 1
+fi
+
+# Clone
+gum spin --title "Cloning $url → submodules/$hash" -- git clone "$url" "$mod_path"
+
+# Check out specific ref if requested
+if [ -n "${usage_ref:-}" ]; then
+  git -C "$mod_path" checkout "$usage_ref"
+fi
+
+# Record the pinned SHA
+pin="$(git -C "$mod_path" rev-parse HEAD)"
+
+# Update manifest
+manifest_set "$name" "$url" "submodules/$hash" "$pin"
+
+# Stage the gitlink and updated manifest
+git -C "$TARGET_DIR" add "$mod_path" "$MANIFEST"
+
+gum style --foreground 2 "Added module '$name' (submodules/$hash @ ${pin:0:12})"

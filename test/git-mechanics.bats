@@ -199,7 +199,7 @@ setup() {
 
 @test "obfuscated directory names work identically to plain names" {
   local hash
-  hash="$(echo "rudi" | shasum | cut -c1-12)"
+  hash="$(hash_name "rudi")"
 
   git clone "$REMOTE" "$PARENT/submodules/$hash"
   git -C "$PARENT" add "submodules/$hash"
@@ -223,8 +223,8 @@ setup() {
   git -C "$remote2" commit -m "second repo marker"
 
   local hash1 hash2
-  hash1="$(echo "repo-one" | shasum | cut -c1-12)"
-  hash2="$(echo "repo-two" | shasum | cut -c1-12)"
+  hash1="$(hash_name "repo-one")"
+  hash2="$(hash_name "repo-two")"
 
   git clone "$REMOTE" "$PARENT/submodules/$hash1"
   git clone "$remote2" "$PARENT/submodules/$hash2"

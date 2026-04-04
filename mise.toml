@@ -5,3 +5,5 @@ experimental = true
 
 [tools]
 bats = "1.13.0"
+gum = "0.17.0"
+jq = "1.8.1"

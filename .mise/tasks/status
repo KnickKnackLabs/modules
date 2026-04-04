@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+#MISE description="Show status of all modules"
+#MISE dir="{{config_root}}"
+set -euo pipefail
+
+source "$MISE_CONFIG_ROOT/lib/common.sh"
+
+require_git
+require_jq
+require_initialized
+
+manifest="$(manifest_read)"
+
+if [ "$(echo "$manifest" | jq 'length')" -eq 0 ]; then
+  echo "No modules."
+  exit 0
+fi
+
+{
+  printf "Name\tStatus\tPin\n"
+  echo "$manifest" | jq -r 'to_entries[] | "\(.key)\t\(.value.url)\t\(.value.path)\t\(.value.pin)"' | \
+  while IFS=$'\t' read -r name url path pin; do
+    mod_path="$TARGET_DIR/$path"
+
+    if [ ! -d "$mod_path/.git" ]; then
+      printf "%s\tmissing\t-\n" "$name"
+      continue
+    fi
+
+    actual="$(git -C "$mod_path" rev-parse HEAD)"
+
+    if [ "$actual" = "$pin" ]; then
+      printf "%s\t✓ at pin\t%.12s\n" "$name" "$pin"
+    else
+      printf "%s\tchanged\t%.12s → %.12s\n" "$name" "$pin" "$actual"
+    fi
+  done
+} | gum table --print --separator "	"

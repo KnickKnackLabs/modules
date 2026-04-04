@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+#MISE description="Remove a module"
+#MISE dir="{{config_root}}"
+#USAGE arg "<name>" help="Module name to remove"
+set -euo pipefail
+
+source "$MISE_CONFIG_ROOT/lib/common.sh"
+
+require_git
+require_jq
+require_initialized
+
+name="$usage_name"
+
+entry="$(manifest_get "$name")" || {
+  echo "Error: module '$name' not found" >&2
+  exit 1
+}
+
+path="$(echo "$entry" | jq -r '.path')"
+mod_path="$TARGET_DIR/$path"
+
+# Remove the clone directory
+if [ -d "$mod_path" ]; then
+  # Unstage the gitlink first
+  git -C "$TARGET_DIR" rm --cached "$mod_path" 2>/dev/null || true
+  rm -rf "$mod_path"
+fi
+
+# Remove from manifest
+manifest_remove "$name"
+git -C "$TARGET_DIR" add "$MANIFEST"
+
+echo "Removed module '$name'"
