@@ -53,6 +53,17 @@ skip_unless_git_crypt() {
   fi
 }
 
+# Skip a test if no GPG key is available for testing.
+# Uses the current user's first secret key.
+skip_unless_gpg_key() {
+  local fpr
+  fpr="$(gpg --list-secret-keys --with-colons 2>/dev/null | awk -F: '/^fpr/{print $10; exit}')"
+  if [ -z "$fpr" ]; then
+    skip "no GPG secret key available"
+  fi
+  export TEST_GPG_FINGERPRINT="$fpr"
+}
+
 # Generate the same obfuscated hash as the modules tool.
 # Must match lib/common.sh hash_name().
 hash_name() {
