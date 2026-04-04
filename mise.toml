@@ -3,7 +3,11 @@ quiet = true
 task_output = "interleave"
 experimental = true
 
+[plugins]
+shiv = "https://github.com/KnickKnackLabs/vfox-shiv"
+
 [tools]
 bats = "1.13.0"
 gum = "0.17.0"
 jq = "1.8.1"
+"shiv:rudi" = "0.4.0"

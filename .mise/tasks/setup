@@ -21,23 +21,14 @@ echo '{}' > "$MANIFEST"
 # ── Encryption (optional) ─────────────────────────────────────
 
 if [ -n "${usage_gpg_key:-}" ]; then
-  if ! command -v git-crypt &>/dev/null; then
-    echo "Error: git-crypt not found (required for --gpg-key)" >&2
-    exit 1
-  fi
-
-  # Initialize git-crypt in the target repo
+  # Initialize encryption via rudi (idempotent — safe on repos with existing git-crypt)
   cd "$TARGET_DIR"
-  git-crypt init
-
-  # Assign the manifest for encryption
-  echo 'submodules/.manifest filter=git-crypt diff=git-crypt' >> "$TARGET_DIR/.gitattributes"
+  CALLER_PWD="$TARGET_DIR" rudi init
+  CALLER_PWD="$TARGET_DIR" rudi assign 'submodules/.manifest'
+  CALLER_PWD="$TARGET_DIR" rudi add-user "$usage_gpg_key"
   git -C "$TARGET_DIR" add .gitattributes
 
-  # Add the GPG user
-  git-crypt add-gpg-user "$usage_gpg_key"
-
-  echo "  encryption: enabled (git-crypt)"
+  echo "  encryption: enabled (rudi)"
 fi
 
 # ── Pre-commit hooks ──────────────────────────────────────────
