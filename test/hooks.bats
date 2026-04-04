@@ -31,9 +31,10 @@ setup() {
 
 @test "dispatcher runs hooks in pre-commit.d" {
   # Add a test hook that creates a marker file
-  cat > "$PARENT/.git/hooks/pre-commit.d/test-hook" <<'EOF'
+  local marker="$BATS_TEST_TMPDIR/hook-ran"
+  cat > "$PARENT/.git/hooks/pre-commit.d/test-hook" <<EOF
 #!/usr/bin/env bash
-touch "$GIT_DIR/../.hook-ran"
+touch "$marker"
 EOF
   chmod +x "$PARENT/.git/hooks/pre-commit.d/test-hook"
 
@@ -41,7 +42,7 @@ EOF
   git -C "$PARENT" add testfile
   git -C "$PARENT" commit -m "test commit"
 
-  [ -f "$PARENT/.hook-ran" ]
+  [ -f "$marker" ]
 }
 
 @test "dispatcher aborts commit on hook failure" {
@@ -99,8 +100,8 @@ EOF
 
 @test "path obfuscation allows .manifest" {
   # .manifest is always under submodules/ — should not be flagged
-  # Just modify the manifest and commit
-  echo '{}' > "$PARENT/submodules/.manifest"
+  # Modify the manifest content so there's actually something to commit
+  echo '{"test": {"url": "x", "path": "x", "pin": "x"}}' > "$PARENT/submodules/.manifest"
   git -C "$PARENT" add submodules/.manifest
 
   run git -C "$PARENT" commit -m "update manifest"

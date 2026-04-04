@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Reject commits with non-obfuscated directory names under submodules/.
+# Valid names are 12-char hex hashes (e.g., a8f3c12b0e9d) or .manifest.
+set -eo pipefail
+
+bad_paths=()
+while IFS= read -r file; do
+  [[ "$file" != submodules/* ]] && continue
+
+  # Strip "submodules/" prefix, get the first path component
+  local_path="${file#submodules/}"
+  dir_name="${local_path%%/*}"
+
+  # Allow .manifest
+  [ "$dir_name" = ".manifest" ] && continue
+
+  # Check if it's a valid 12-char hex hash
+  if ! [[ "$dir_name" =~ ^[0-9a-f]{12}$ ]]; then
+    bad_paths+=("$file")
+  fi
+done < <(git diff --cached --name-only --diff-filter=ACMR)
+
+# Also check staged gitlinks (mode 160000) — these show as just the path
+while IFS= read -r line; do
+  mode="$(echo "$line" | awk '{print $1}')"
+  file="$(echo "$line" | awk '{print $NF}')"
+  [ "$mode" != "160000" ] && continue
+  [[ "$file" != submodules/* ]] && continue
+
+  dir_name="${file#submodules/}"
+  dir_name="${dir_name%%/*}"
+
+  [ "$dir_name" = ".manifest" ] && continue
+
+  if ! [[ "$dir_name" =~ ^[0-9a-f]{12}$ ]]; then
+    bad_paths+=("$file")
+  fi
+done < <(git diff --cached --raw --diff-filter=ACMR)
+
+if [ "${#bad_paths[@]}" -gt 0 ]; then
+  echo "ERROR: Non-obfuscated paths under submodules/:" >&2
+  printf '  %s\n' "${bad_paths[@]}" >&2
+  echo "" >&2
+  echo "Module directories must be obfuscated hashes. Use 'modules add' to add dependencies." >&2
+  exit 1
+fi
