@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+#MISE description="Unlock encrypted manifest using your GPG key"
+set -eo pipefail
+
+source "$MISE_CONFIG_ROOT/lib/common.sh"
+
+require_git
+require_rudi
+
+cd "$TARGET_DIR"
+rudi unlock
+
+# Known limitation: rudi unlock decrypts ALL git-crypt-encrypted files,
+# not just the modules manifest. This also decrypts notes and anything
+# else using git-crypt in this repo. Tracked in KnickKnackLabs/rudi#5.
+echo "Note: unlock decrypts all encrypted files in this repo (rudi#5)."
