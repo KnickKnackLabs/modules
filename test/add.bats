@@ -128,6 +128,14 @@ setup() {
   [[ "$output" == *"not initialized"* ]]
 }
 
+@test "add with dots in name" {
+  run modules add "$REMOTE" --name "org.repo.git"
+  [ "$status" -eq 0 ]
+
+  run jq -r '.["org.repo.git"].url' "$PARENT/submodules/.manifest"
+  [ "$output" = "$REMOTE" ]
+}
+
 @test "add multiple modules" {
   local remote2="$BATS_TEST_TMPDIR/remote2"
   create_remote_repo "$remote2"

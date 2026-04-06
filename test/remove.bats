@@ -56,6 +56,24 @@ setup() {
   [[ "$output" == *"not found"* ]]
 }
 
+@test "remove works when module was never cloned" {
+  modules add "$REMOTE" --name my-repo
+  git -C "$PARENT" commit -m "add module"
+
+  local hash
+  hash="$(hash_name "my-repo")"
+
+  # Simulate fresh clone: remove the clone but keep the manifest entry
+  rm -rf "$PARENT/submodules/$hash"
+
+  run modules remove my-repo
+  [ "$status" -eq 0 ]
+
+  # Manifest should be empty
+  run jq 'length' "$PARENT/submodules/.manifest"
+  [ "$output" = "0" ]
+}
+
 @test "remove one of multiple modules leaves others intact" {
   local remote2="$BATS_TEST_TMPDIR/remote2"
   create_remote_repo "$remote2"
