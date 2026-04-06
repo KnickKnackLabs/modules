@@ -18,9 +18,8 @@ fi
 # ── Encryption: auto-detect via rudi ───────────────────────────
 
 if command -v rudi &>/dev/null; then
-  rudi_status="$(cd "$TARGET_DIR" && rudi status --json 2>&1)" || {
-    echo "Error: rudi status --json failed:" >&2
-    echo "$rudi_status" >&2
+  rudi_status="$(cd "$TARGET_DIR" && rudi status --json)" || {
+    echo "Error: rudi status --json failed" >&2
     exit 1
   }
   if echo "$rudi_status" | jq -e '.initialized == true' &>/dev/null; then
