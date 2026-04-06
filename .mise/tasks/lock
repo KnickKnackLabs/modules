@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#MISE description="Lock encrypted manifest (re-encrypt on disk)"
+set -eo pipefail
+
+source "$MISE_CONFIG_ROOT/lib/common.sh"
+
+require_git
+require_jq
+
+if ! command -v rudi &>/dev/null; then
+  echo "Error: rudi not found (required for encryption)" >&2
+  exit 1
+fi
+
+cd "$TARGET_DIR"
+rudi lock
+
+# Known limitation: rudi lock without --key locks ALL git-crypt-encrypted
+# files, not just the modules manifest. Tracked in KnickKnackLabs/rudi#5.
+echo "Note: lock re-encrypts all encrypted files in this repo (rudi#5)."
