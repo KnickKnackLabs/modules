@@ -18,9 +18,16 @@ fi
 # ── Encryption: auto-detect via rudi ───────────────────────────
 
 if command -v rudi &>/dev/null; then
-  rudi_status="$(cd "$TARGET_DIR" && rudi status --json 2>/dev/null || echo '{}')" 
+  rudi_status="$(cd "$TARGET_DIR" && rudi status --json 2>&1)" || {
+    echo "Error: rudi status --json failed:" >&2
+    echo "$rudi_status" >&2
+    exit 1
+  }
   if echo "$rudi_status" | jq -e '.initialized == true' &>/dev/null; then
-    (cd "$TARGET_DIR" && rudi assign 'submodules/.manifest')
+    (cd "$TARGET_DIR" && rudi assign 'submodules/.manifest') || {
+      echo "Error: rudi assign failed" >&2
+      exit 1
+    }
     echo "  encryption: manifest assigned to git-crypt"
   fi
 fi
