@@ -27,3 +27,26 @@ setup() {
   h2="$(hash_name "repo-b")"
   [ "$h1" != "$h2" ]
 }
+
+@test "hash_name handles spaces in names" {
+  local hash
+  hash="$(hash_name "my module")"
+  [ ${#hash} -eq 12 ]
+  [[ "$hash" =~ ^[0-9a-f]{12}$ ]]
+}
+
+@test "hash_name handles dots and slashes" {
+  local h1 h2
+  h1="$(hash_name "org/repo.git")"
+  h2="$(hash_name "org/repo")"
+  [ ${#h1} -eq 12 ]
+  [[ "$h1" =~ ^[0-9a-f]{12}$ ]]
+  [ "$h1" != "$h2" ]
+}
+
+@test "hash_name handles unicode" {
+  local hash
+  hash="$(hash_name "日本語リポ")"
+  [ ${#hash} -eq 12 ]
+  [[ "$hash" =~ ^[0-9a-f]{12}$ ]]
+}
