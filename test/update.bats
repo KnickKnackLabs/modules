@@ -91,6 +91,25 @@ setup() {
   [[ "$output" == *"updated"* ]]
 }
 
+@test "update all reports failure when a module fails" {
+  local remote2="$BATS_TEST_TMPDIR/remote2"
+  create_remote_repo "$remote2"
+
+  modules add "$REMOTE" --name first
+  modules add "$remote2" --name second
+  git -C "$PARENT" commit -m "add modules"
+
+  # Break the first module's clone so pull fails
+  local hash
+  hash="$(hash_name "first")"
+  rm -rf "$PARENT/submodules/$hash/.git"
+  mkdir -p "$PARENT/submodules/$hash/.git"  # broken .git dir
+
+  run modules update
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"failed to update"* ]]
+}
+
 @test "update fails for unknown module" {
   run modules update nonexistent
   [ "$status" -ne 0 ]
