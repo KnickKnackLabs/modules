@@ -35,6 +35,13 @@ require_jq() {
   fi
 }
 
+require_rudi() {
+  if ! command -v rudi &>/dev/null; then
+    echo "Error: rudi not found. Install it: shiv install rudi" >&2
+    exit 1
+  fi
+}
+
 # ── Hashing ───────────────────────────────────────────────────
 
 # Generate an obfuscated directory name from a module name.

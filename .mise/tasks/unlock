@@ -5,12 +5,7 @@ set -eo pipefail
 source "$MISE_CONFIG_ROOT/lib/common.sh"
 
 require_git
-require_jq
-
-if ! command -v rudi &>/dev/null; then
-  echo "Error: rudi not found (required for encryption)" >&2
-  exit 1
-fi
+require_rudi
 
 cd "$TARGET_DIR"
 rudi unlock
