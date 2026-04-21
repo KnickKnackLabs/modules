@@ -5,6 +5,7 @@
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/common.sh"
+source "$MISE_CONFIG_ROOT/lib/hooks.sh"
 
 require_git
 require_jq
@@ -93,11 +94,17 @@ done
 
 rm -f "$HOOKS_DST/pre-commit.d/path-obfuscation"
 
-# Stage the manifest, config, and gitignore
-git -C "$TARGET_DIR" add "$MANIFEST" "$CONFIG" "$GITIGNORE"
+# ── Manifest merge driver ────────────────────────────────
+# Required to safely merge concurrent pin bumps (notes#48-class bug).
+
+install_manifest_merge_driver
+
+# Stage the manifest, config, gitignore, and gitattributes
+git -C "$TARGET_DIR" add "$MANIFEST" "$CONFIG" "$GITIGNORE" "$TARGET_DIR/.gitattributes" 2>/dev/null || true
 
 echo "Initialized modules in $TARGET_DIR"
 echo "  manifest:  $MANIFEST_REL"
 echo "  config:    $CONFIG_REL"
 echo "  clones at: $CLONES_PATH_REL/"
 echo "  hooks: pre-commit dispatcher + 2 guards"
+echo "  merge:    .modules/manifest (union merge driver)"
