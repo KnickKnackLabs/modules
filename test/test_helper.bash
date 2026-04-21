@@ -54,13 +54,32 @@ skip_unless_git_crypt() {
 }
 
 # Skip a test if no GPG key is available for testing.
-# Uses the current user's first secret key.
+#
+# Resolution order for the test key:
+#   1. Pre-set TEST_GPG_FINGERPRINT (explicit override).
+#   2. The secret key matching $GIT_AUTHOR_EMAIL (via testicles) — this is
+#      the identity-scoped key, not some random first-in-the-keyring.
+#   3. Skip if none of the above resolves.
 skip_unless_gpg_key() {
-  local fpr
-  fpr="$(gpg --list-secret-keys --with-colons 2>/dev/null | awk -F: '/^fpr/{print $10; exit}')"
-  if [ -z "$fpr" ]; then
-    skip "no GPG secret key available"
+  if [ -n "${TEST_GPG_FINGERPRINT:-}" ]; then
+    return 0
   fi
+
+  if ! command -v testicles &>/dev/null; then
+    skip "testicles not installed (needed to resolve GPG identity key)"
+  fi
+
+  local email="${GIT_AUTHOR_EMAIL:-}"
+  if [ -z "$email" ]; then
+    skip "GIT_AUTHOR_EMAIL not set — cannot resolve identity key"
+  fi
+
+  local fpr
+  fpr="$(testicles inspect "$email" --first --json 2>/dev/null | jq -r '.fingerprint // empty')" || true
+  if [ -z "$fpr" ]; then
+    skip "no secret key matches $email"
+  fi
+
   export TEST_GPG_FINGERPRINT="$fpr"
 }
 
