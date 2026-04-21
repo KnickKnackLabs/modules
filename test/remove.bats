@@ -21,33 +21,31 @@ setup() {
   modules add "$REMOTE" --name my-repo
   git -C "$PARENT" commit -m "add module"
 
-  local hash
-  hash="$(hash_name "my-repo")"
-
   run modules remove my-repo
   [ "$status" -eq 0 ]
   [[ "$output" == *"Removed"* ]]
 
   # Clone should be gone
-  [ ! -d "$PARENT/submodules/$hash" ]
+  [ ! -d "$PARENT/modules/my-repo" ]
 
   # Manifest should be empty
-  run jq 'length' "$PARENT/submodules/.manifest"
+  run jq 'length' "$PARENT/.modules/manifest"
   [ "$output" = "0" ]
 }
 
-@test "remove unstages the gitlink" {
+@test "remove touches only the manifest (no gitlink cleanup needed)" {
   modules add "$REMOTE" --name my-repo
   git -C "$PARENT" commit -m "add module"
 
-  local hash
-  hash="$(hash_name "my-repo")"
-
   modules remove my-repo
 
-  # Gitlink should no longer be in the index
-  run git -C "$PARENT" ls-files --stage "submodules/$hash"
+  # Nothing under modules/ is ever tracked — confirm no orphan index entries
+  run git -C "$PARENT" ls-files modules/
   [ -z "$output" ]
+
+  # Manifest change should be staged
+  run git -C "$PARENT" diff --cached --name-only
+  [[ "$output" == *".modules/manifest"* ]]
 }
 
 @test "remove fails for unknown module" {
@@ -60,17 +58,14 @@ setup() {
   modules add "$REMOTE" --name my-repo
   git -C "$PARENT" commit -m "add module"
 
-  local hash
-  hash="$(hash_name "my-repo")"
-
   # Simulate fresh clone: remove the clone but keep the manifest entry
-  rm -rf "$PARENT/submodules/$hash"
+  rm -rf "$PARENT/modules/my-repo"
 
   run modules remove my-repo
   [ "$status" -eq 0 ]
 
   # Manifest should be empty
-  run jq 'length' "$PARENT/submodules/.manifest"
+  run jq 'length' "$PARENT/.modules/manifest"
   [ "$output" = "0" ]
 }
 
@@ -85,9 +80,7 @@ setup() {
   modules remove first
 
   # Second should still exist
-  local hash2
-  hash2="$(hash_name "second")"
-  [ -d "$PARENT/submodules/$hash2" ]
-  run jq -r 'keys[0]' "$PARENT/submodules/.manifest"
+  [ -d "$PARENT/modules/second" ]
+  run jq -r 'keys[0]' "$PARENT/.modules/manifest"
   [ "$output" = "second" ]
 }

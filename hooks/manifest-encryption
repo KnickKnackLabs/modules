@@ -4,7 +4,7 @@
 set -eo pipefail
 
 # Only check if the manifest is being staged
-if ! git diff --cached --name-only --diff-filter=ACMR | grep -qx 'submodules/\.manifest'; then
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -qx '\.modules/manifest'; then
   exit 0
 fi
 
@@ -21,8 +21,8 @@ if [ ! -d ".git/git-crypt" ]; then
 fi
 
 # Check if the manifest is encrypted via the git-crypt filter
-if git-crypt status submodules/.manifest 2>&1 | grep -q "not encrypted"; then
-  echo "ERROR: submodules/.manifest is staged in plaintext but should be encrypted." >&2
+if git-crypt status .modules/manifest 2>&1 | grep -q "not encrypted"; then
+  echo "ERROR: .modules/manifest is staged in plaintext but should be encrypted." >&2
   echo "Run 'rudi unlock' if git-crypt is locked, then re-stage." >&2
   exit 1
 fi

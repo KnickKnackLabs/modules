@@ -25,6 +25,6 @@ fi
 
 # Pretty print
 {
-  printf "Name\tURL\tPath\tPin\n"
-  echo "$manifest" | jq -r 'to_entries[] | "\(.key)\t\(.value.url)\t\(.value.path)\t\(.value.pin[:12])"'
+  printf "Name\tURL\tPin\n"
+  echo "$manifest" | jq -r 'to_entries[] | "\(.key)\t\(.value.url)\t\(.value.pin[:12])"'
 } | gum table --print --separator "	"

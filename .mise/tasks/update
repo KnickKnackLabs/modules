@@ -15,11 +15,11 @@ update_module() {
   local entry
   entry="$(manifest_get "$name")" || { echo "Error: module '$name' not found" >&2; return 1; }
 
-  local url path pin
+  local url pin
   url="$(echo "$entry" | jq -r '.url')"
-  path="$(echo "$entry" | jq -r '.path')"
   pin="$(echo "$entry" | jq -r '.pin')"
-  local mod_path="$TARGET_DIR/$path"
+  local mod_path
+  mod_path="$(module_path "$name")"
 
   if [ ! -d "$mod_path/.git" ]; then
     echo "  $name: not cloned (run: modules init)" >&2
@@ -60,8 +60,8 @@ update_module() {
   if [ "$new_pin" = "$pin" ]; then
     echo "  $name: already up to date (${pin:0:12})"
   else
-    manifest_set "$name" "$url" "$path" "$new_pin"
-    git -C "$TARGET_DIR" add "$mod_path" "$MANIFEST"
+    manifest_set "$name" "$url" "$new_pin"
+    git -C "$TARGET_DIR" add "$MANIFEST"
     echo "  $name: updated ${pin:0:12} → ${new_pin:0:12}"
   fi
 }

@@ -14,11 +14,22 @@ require_initialized
 
 url="$usage_url"
 
-# Derive name from URL if not provided: https://github.com/org/repo.git → repo
+# Derive name from URL if not provided.
+# Handles HTTPS (https://github.com/org/repo.git), SSH (git@github.com:org/repo.git),
+# and trailing-slash forms. basename + .git strip covers all of them.
 if [ -n "${usage_name:-}" ]; then
   name="$usage_name"
 else
   name="$(basename "$url" .git)"
+  name="${name%/}"
+fi
+
+# Validate name: must be a plausible directory name.
+# No slashes, no dots (to avoid . / .. shenanigans), non-empty.
+if [ -z "$name" ] || [[ "$name" == *"/"* ]] || [[ "$name" == "."* ]]; then
+  echo "Error: invalid module name: '$name'" >&2
+  echo "Use --name to provide an explicit name." >&2
+  exit 1
 fi
 
 # Check for duplicate
@@ -27,17 +38,17 @@ if manifest_get "$name" &>/dev/null; then
   exit 1
 fi
 
-# Generate obfuscated path
-hash="$(hash_name "$name")"
-mod_path="$SUBMODULES_DIR/$hash"
+mod_path="$(module_path "$name")"
+clones_rel="$(clones_path_rel)"
 
 if [ -d "$mod_path" ]; then
-  echo "Error: directory already exists: submodules/$hash" >&2
+  echo "Error: directory already exists: $clones_rel/$name" >&2
   exit 1
 fi
 
 # Clone
-gum spin --title "Cloning $url → submodules/$hash" -- git clone "$url" "$mod_path"
+mkdir -p "$(clones_dir)"
+gum spin --title "Cloning $url → $clones_rel/$name" -- git clone "$url" "$mod_path"
 
 # Check out specific ref if requested
 if [ -n "${usage_ref:-}" ]; then
@@ -48,9 +59,9 @@ fi
 pin="$(git -C "$mod_path" rev-parse HEAD)"
 
 # Update manifest
-manifest_set "$name" "$url" "submodules/$hash" "$pin"
+manifest_set "$name" "$url" "$pin"
 
-# Stage the gitlink and updated manifest
-git -C "$TARGET_DIR" add "$mod_path" "$MANIFEST"
+# Stage the manifest only — clones dir is gitignored, nothing to stage there.
+git -C "$TARGET_DIR" add "$MANIFEST"
 
-gum style --foreground 2 "Added module '$name' (submodules/$hash @ ${pin:0:12})"
+gum style --foreground 2 "Added module '$name' ($clones_rel/$name @ ${pin:0:12})"

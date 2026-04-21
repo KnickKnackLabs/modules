@@ -29,13 +29,10 @@ setup() {
 @test "status shows changed when module has new commits" {
   modules add "$REMOTE" --name my-repo
 
-  local hash
-  hash="$(hash_name "my-repo")"
-
   # Make a new commit in the clone
-  echo "new" > "$PARENT/submodules/$hash/new.md"
-  git -C "$PARENT/submodules/$hash" add new.md
-  git -C "$PARENT/submodules/$hash" commit -m "new commit"
+  echo "new" > "$PARENT/modules/my-repo/new.md"
+  git -C "$PARENT/modules/my-repo" add new.md
+  git -C "$PARENT/modules/my-repo" commit -m "new commit"
 
   run modules status
   [ "$status" -eq 0 ]
@@ -46,9 +43,7 @@ setup() {
   modules add "$REMOTE" --name my-repo
   git -C "$PARENT" commit -m "add module"
 
-  local hash
-  hash="$(hash_name "my-repo")"
-  rm -rf "$PARENT/submodules/$hash"
+  rm -rf "$PARENT/modules/my-repo"
 
   run modules status
   [ "$status" -eq 0 ]

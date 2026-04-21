@@ -48,14 +48,27 @@ HOOK
   [ -x "$fresh/.git/hooks/pre-commit.d/existing-hook" ]
   # Modules hooks should also be installed
   [ -x "$fresh/.git/hooks/pre-commit.d/gitmodules-guard" ]
-  [ -x "$fresh/.git/hooks/pre-commit.d/path-obfuscation" ]
   [ -x "$fresh/.git/hooks/pre-commit.d/manifest-encryption" ]
 }
 
-@test "setup installs all three hooks" {
+@test "setup installs two hooks (no path-obfuscation in opacity redesign)" {
   [ -x "$PARENT/.git/hooks/pre-commit.d/manifest-encryption" ]
-  [ -x "$PARENT/.git/hooks/pre-commit.d/path-obfuscation" ]
   [ -x "$PARENT/.git/hooks/pre-commit.d/gitmodules-guard" ]
+  # path-obfuscation hook should NOT be installed — the new design doesn't need it
+  [ ! -e "$PARENT/.git/hooks/pre-commit.d/path-obfuscation" ]
+}
+
+@test "setup removes obsolete path-obfuscation hook if present" {
+  # Simulate upgrading from an old layout where path-obfuscation was installed
+  cat > "$PARENT/.git/hooks/pre-commit.d/path-obfuscation" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+  chmod +x "$PARENT/.git/hooks/pre-commit.d/path-obfuscation"
+
+  modules setup
+
+  [ ! -e "$PARENT/.git/hooks/pre-commit.d/path-obfuscation" ]
 }
 
 @test "dispatcher runs hooks in pre-commit.d" {
@@ -107,42 +120,13 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-# ── Path obfuscation guard ─────────────────────────────────────
-
-@test "path obfuscation rejects non-hashed dirs under submodules/" {
-  # Create a clearly-named submodule dir (not a 12-char hex hash)
-  mkdir -p "$PARENT/submodules/my-secret-repo"
-  echo "leaked" > "$PARENT/submodules/my-secret-repo/file.txt"
-  git -C "$PARENT" add submodules/my-secret-repo/
-
-  run git -C "$PARENT" commit -m "add leaky path"
-  [ "$status" -ne 0 ]
-  [[ "$output" == *"obfuscat"* ]]
-}
-
-@test "path obfuscation allows hashed dirs under submodules/" {
-  modules add "$REMOTE" --name my-repo
-
-  run git -C "$PARENT" commit -m "add module"
-  [ "$status" -eq 0 ]
-}
-
-@test "path obfuscation allows .manifest" {
-  # .manifest is always under submodules/ — should not be flagged
-  # Modify the manifest content so there's actually something to commit
-  echo '{"test": {"url": "x", "path": "x", "pin": "x"}}' > "$PARENT/submodules/.manifest"
-  git -C "$PARENT" add submodules/.manifest
-
-  run git -C "$PARENT" commit -m "update manifest"
-  [ "$status" -eq 0 ]
-}
-
 # ── Manifest encryption guard ──────────────────────────────────
 
 @test "manifest encryption hook warns without git-crypt" {
   # In test repos, git-crypt isn't initialized — hook should warn but pass
-  echo '{"test": {}}' > "$PARENT/submodules/.manifest"
-  git -C "$PARENT" add submodules/.manifest
+  mkdir -p "$PARENT/.modules"
+  echo '{"test": {}}' > "$PARENT/.modules/manifest"
+  git -C "$PARENT" add .modules/manifest
 
   run git -C "$PARENT" commit -m "update manifest"
   [ "$status" -eq 0 ]

@@ -17,19 +17,22 @@ if [ "$count" -eq 0 ]; then
   exit 0
 fi
 
+mkdir -p "$(clones_dir)"
+clones_rel="$(clones_path_rel)"
+
 errors=0
 
-while IFS=$'\t' read -r name url path pin; do
-  mod_path="$TARGET_DIR/$path"
+while IFS=$'\t' read -r name url pin; do
+  mod_path="$(module_path "$name")"
 
   if [ -d "$mod_path/.git" ]; then
     echo "  $name: already cloned"
     continue
   fi
 
-  echo "  $name: cloning $url → $path"
+  echo "  $name: cloning $url → $clones_rel/$name"
 
-  # Clean up any empty directory left by git
+  # Clean up any empty directory left by a prior failed clone
   if [ -d "$mod_path" ]; then
     rmdir "$mod_path" 2>/dev/null || true
   fi
@@ -47,7 +50,7 @@ while IFS=$'\t' read -r name url path pin; do
   if [ "$actual" != "$pin" ]; then
     echo "  $name: warning — expected $pin, at $actual" >&2
   fi
-done < <(echo "$manifest" | jq -r 'to_entries[] | "\(.key)\t\(.value.url)\t\(.value.path)\t\(.value.pin)"')
+done < <(echo "$manifest" | jq -r 'to_entries[] | "\(.key)\t\(.value.url)\t\(.value.pin)"')
 
 if [ "$errors" -gt 0 ]; then
   echo "$errors module(s) failed to initialize" >&2

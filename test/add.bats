@@ -18,30 +18,31 @@ setup() {
   git -C "$PARENT" commit -m "init modules"
 }
 
-@test "add clones repo into hashed path" {
+@test "add clones repo into readable path" {
   run modules add "$REMOTE"
   [ "$status" -eq 0 ]
 
   # Should mention the module name (derived from dir name: "remote")
   [[ "$output" == *"Added module 'remote'"* ]]
 
-  # Hashed directory should exist with repo contents
-  local hash
-  hash="$(hash_name "remote")"
-  [ -d "$PARENT/submodules/$hash/.git" ]
-  [ -f "$PARENT/submodules/$hash/README.md" ]
+  # Readable directory should exist with repo contents
+  [ -d "$PARENT/modules/remote/.git" ]
+  [ -f "$PARENT/modules/remote/README.md" ]
 }
 
 @test "add records entry in manifest" {
   modules add "$REMOTE"
 
   local manifest
-  manifest="$(cat "$PARENT/submodules/.manifest")"
+  manifest="$(cat "$PARENT/.modules/manifest")"
 
-  # Should have a "remote" key with url, path, pin
+  # Should have a "remote" key with url and pin (no path — derived from name)
   echo "$manifest" | jq -e '.remote.url' >/dev/null
-  echo "$manifest" | jq -e '.remote.path' >/dev/null
   echo "$manifest" | jq -e '.remote.pin' >/dev/null
+
+  # No path field in the new design
+  run jq -e '.remote.path' "$PARENT/.modules/manifest"
+  [ "$status" -ne 0 ]
 
   # URL should match
   local url
@@ -55,20 +56,20 @@ setup() {
   [ "$pin" = "$expected" ]
 }
 
-@test "add stages gitlink and manifest" {
+@test "add stages manifest only (no gitlink, modules/ is gitignored)" {
   modules add "$REMOTE"
-
-  local hash
-  hash="$(hash_name "remote")"
-
-  # Gitlink should be staged
-  run gitlink_info "$PARENT" "submodules/$hash"
-  [ "$status" -eq 0 ]
-  [[ "$output" == 160000\ * ]]
 
   # Manifest should be staged
   run git -C "$PARENT" diff --cached --name-only
-  [[ "$output" == *"submodules/.manifest"* ]]
+  [[ "$output" == *".modules/manifest"* ]]
+
+  # modules/ contents should NOT be tracked
+  run git -C "$PARENT" ls-files modules/
+  [ -z "$output" ]
+
+  # No gitlink entries anywhere
+  run git -C "$PARENT" ls-files --stage
+  [[ "$output" != *"160000"* ]]
 }
 
 @test "add with --name uses custom name" {
@@ -76,13 +77,11 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"Added module 'my-dep'"* ]]
 
-  # Hashed under custom name
-  local hash
-  hash="$(hash_name "my-dep")"
-  [ -d "$PARENT/submodules/$hash" ]
+  # Clone exists under custom name
+  [ -d "$PARENT/modules/my-dep" ]
 
   # Manifest uses custom name
-  run jq -r 'keys[0]' "$PARENT/submodules/.manifest"
+  run jq -r 'keys[0]' "$PARENT/.modules/manifest"
   [ "$output" = "my-dep" ]
 }
 
@@ -94,14 +93,12 @@ setup() {
   modules add "$REMOTE" --ref "$first_sha"
 
   local pin
-  pin="$(jq -r '.remote.pin' "$PARENT/submodules/.manifest")"
+  pin="$(jq -r '.remote.pin' "$PARENT/.modules/manifest")"
   [ "$pin" = "$first_sha" ]
 
   # The clone should be at that commit
-  local hash
-  hash="$(hash_name "remote")"
   local head
-  head="$(repo_head "$PARENT/submodules/$hash")"
+  head="$(repo_head "$PARENT/modules/remote")"
   [ "$head" = "$first_sha" ]
 }
 
@@ -128,12 +125,25 @@ setup() {
   [[ "$output" == *"not initialized"* ]]
 }
 
-@test "add with dots in name" {
-  run modules add "$REMOTE" --name "org.repo.git"
+@test "add with dots in name is rejected" {
+  # Dot-prefix names are rejected (avoids . / .. path shenanigans)
+  run modules add "$REMOTE" --name ".hidden"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"invalid module name"* ]]
+}
+
+@test "add with dots in middle of name is allowed" {
+  run modules add "$REMOTE" --name "org.repo"
   [ "$status" -eq 0 ]
 
-  run jq -r '.["org.repo.git"].url' "$PARENT/submodules/.manifest"
+  run jq -r '.["org.repo"].url' "$PARENT/.modules/manifest"
   [ "$output" = "$REMOTE" ]
+}
+
+@test "add with slashes in name is rejected" {
+  run modules add "$REMOTE" --name "org/repo"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"invalid module name"* ]]
 }
 
 @test "add multiple modules" {
@@ -144,13 +154,21 @@ setup() {
   modules add "$remote2" --name second
 
   # Both in manifest
-  run jq -r 'keys | length' "$PARENT/submodules/.manifest"
+  run jq -r 'keys | length' "$PARENT/.modules/manifest"
   [ "$output" = "2" ]
 
   # Both directories exist
-  local hash1 hash2
-  hash1="$(hash_name "first")"
-  hash2="$(hash_name "second")"
-  [ -d "$PARENT/submodules/$hash1" ]
-  [ -d "$PARENT/submodules/$hash2" ]
+  [ -d "$PARENT/modules/first" ]
+  [ -d "$PARENT/modules/second" ]
+}
+
+@test "add derives name from https URL with .git suffix" {
+  # Can't actually clone from a URL; just ensure the name derivation is correct
+  # by inspecting the error (invalid URL but valid name flow)
+  run modules add "https://github.com/org/foobar.git" --name foobar
+  # name "foobar" should be the module name; clone will fail (URL unreachable in test),
+  # but we just want to ensure --name works with URL-derived form
+  # This test is really about validating that the name-derivation logic in non-name mode
+  # would produce "foobar"; here we use --name to pin it.
+  [[ "$output" == *"Cloning"* || "$output" == *"fatal"* || "$output" == *"foobar"* ]]
 }

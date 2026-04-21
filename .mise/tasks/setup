@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="Initialize modules in the current repo"
 #MISE dir="{{config_root}}"
+#USAGE flag "--path <path>" help="Clone-root path relative to repo (default: modules)"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/common.sh"
@@ -8,14 +9,64 @@ source "$MISE_CONFIG_ROOT/lib/common.sh"
 require_git
 require_jq
 
-# ── Re-entrant: skip manifest creation if already initialized ──
+# ── Resolve and validate requested path ──────────────────────
+
+# Determine the clone-root path:
+#   1. --path flag (explicit user choice)
+#   2. existing .modules/config (re-entrant setup)
+#   3. DEFAULT_CLONES_PATH
+requested_path="${usage_path:-}"
+if [ -z "$requested_path" ]; then
+  requested_path="$(clones_path_rel)"
+fi
+
+# Validate: no absolute paths, no parent-dir traversal, non-empty.
+if [ -z "$requested_path" ] \
+  || [[ "$requested_path" = /* ]] \
+  || [[ "$requested_path" = *".."* ]] \
+  || [[ "$requested_path" = .* ]]; then
+  echo "Error: invalid --path: '$requested_path'" >&2
+  echo "Path must be relative, not start with a dot, and not contain '..'" >&2
+  exit 1
+fi
+
+# Strip trailing slashes
+requested_path="${requested_path%/}"
+
+# Refuse to clobber a pre-existing non-empty dir that isn't already ours.
+full_path="$TARGET_DIR/$requested_path"
+if [ -d "$full_path" ] && [ -n "$(ls -A "$full_path" 2>/dev/null)" ] && [ ! -f "$CONFIG" ]; then
+  echo "Error: '$requested_path/' already exists and is not empty." >&2
+  echo "Pass --path <other-path> to use a different location." >&2
+  exit 1
+fi
+
+# ── Create .modules/ with manifest + config ──────────────────
+
+mkdir -p "$MODULES_DIR"
 
 if [ ! -f "$MANIFEST" ]; then
-  mkdir -p "$SUBMODULES_DIR"
   echo '{}' > "$MANIFEST"
 fi
 
-# ── Encryption: auto-detect via rudi ───────────────────────────
+# Write or update config
+jq -n --arg p "$requested_path" '{"path": $p}' > "$CONFIG"
+
+# Recompute clones path now that config is written
+CLONES_PATH_REL="$(clones_path_rel)"
+
+# ── Gitignore the clones dir (local clones, never tracked) ───
+
+GITIGNORE="$TARGET_DIR/.gitignore"
+gitignore_entry="$CLONES_PATH_REL/"
+if [ ! -f "$GITIGNORE" ] || ! grep -qxF "$gitignore_entry" "$GITIGNORE"; then
+  if [ -f "$GITIGNORE" ] && [ -n "$(tail -c1 "$GITIGNORE")" ]; then
+    printf '\n' >> "$GITIGNORE"
+  fi
+  echo "$gitignore_entry" >> "$GITIGNORE"
+fi
+
+# ── Encryption: auto-detect via rudi ──────────────────────────
 
 if command -v rudi &>/dev/null; then
   rudi_status="$(cd "$TARGET_DIR" && rudi status --json)" || {
@@ -23,7 +74,7 @@ if command -v rudi &>/dev/null; then
     exit 1
   }
   if echo "$rudi_status" | jq -e '.initialized == true' &>/dev/null; then
-    (cd "$TARGET_DIR" && rudi assign 'submodules/.manifest') || {
+    (cd "$TARGET_DIR" && rudi assign "$MANIFEST_REL") || {
       echo "Error: rudi assign failed" >&2
       exit 1
     }
@@ -37,8 +88,6 @@ HOOKS_SRC="$MISE_CONFIG_ROOT/hooks"
 HOOKS_DST="$TARGET_DIR/.git/hooks"
 
 # Install dispatcher only if no pre-commit hook exists yet.
-# If one exists, assume it already dispatches to pre-commit.d/ (or the
-# user has their own setup — either way, don't clobber it).
 if [ ! -x "$HOOKS_DST/pre-commit" ]; then
   cp "$HOOKS_SRC/dispatcher" "$HOOKS_DST/pre-commit"
   chmod +x "$HOOKS_DST/pre-commit"
@@ -46,14 +95,19 @@ fi
 
 # Add our hooks to pre-commit.d/ — never remove existing hooks.
 mkdir -p "$HOOKS_DST/pre-commit.d"
-for hook in gitmodules-guard path-obfuscation manifest-encryption; do
+for hook in gitmodules-guard manifest-encryption; do
   cp "$HOOKS_SRC/$hook" "$HOOKS_DST/pre-commit.d/$hook"
   chmod +x "$HOOKS_DST/pre-commit.d/$hook"
 done
 
-# Stage the manifest
-git -C "$TARGET_DIR" add "$MANIFEST"
+# Clean up obsolete path-obfuscation hook if installed by a prior version.
+rm -f "$HOOKS_DST/pre-commit.d/path-obfuscation"
+
+# Stage the manifest, config, and gitignore
+git -C "$TARGET_DIR" add "$MANIFEST" "$CONFIG" "$GITIGNORE"
 
 echo "Initialized modules in $TARGET_DIR"
-echo "  manifest: submodules/.manifest"
-echo "  hooks: pre-commit dispatcher + 3 guards"
+echo "  manifest:  $MANIFEST_REL"
+echo "  config:    $CONFIG_REL"
+echo "  clones at: $CLONES_PATH_REL/"
+echo "  hooks: pre-commit dispatcher + 2 guards"

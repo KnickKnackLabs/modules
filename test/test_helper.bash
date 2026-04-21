@@ -64,14 +64,10 @@ skip_unless_gpg_key() {
   export TEST_GPG_FINGERPRINT="$fpr"
 }
 
-# Import hash_name from common.sh — single source of truth.
+# Import module_path from common.sh — single source of truth.
+# Note: common.sh requires CALLER_PWD; tests using module_path must set it first.
 # shellcheck source=../lib/common.sh
-source "$REPO_DIR/lib/common.sh"
-export -f hash_name
-
-# Get the gitlink mode and SHA for a path in the parent's index.
-# Usage: gitlink_info <parent> <path>
-# Output: "mode sha" (e.g., "160000 abc123...")
-gitlink_info() {
-  git -C "$1" ls-files --stage "$2" | awk '{print $1, $2}'
-}
+# Source in a subshell-safe way: common.sh uses set -euo pipefail but we want the
+# functions available in the current shell.
+CALLER_PWD="${CALLER_PWD:-/tmp}" source "$REPO_DIR/lib/common.sh"
+export -f module_path

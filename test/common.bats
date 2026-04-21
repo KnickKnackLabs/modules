@@ -5,48 +5,48 @@ bats_require_minimum_version 1.5.0
 
 setup() {
   load test_helper
+  # Fresh fake repo per test so config writes don't leak between cases
+  FAKE_REPO="$BATS_TEST_TMPDIR/fake-repo"
+  mkdir -p "$FAKE_REPO"
+  CALLER_PWD="$FAKE_REPO"
+  export CALLER_PWD
+  source "$REPO_DIR/lib/common.sh"
 }
 
-@test "hash_name produces consistent 12-char hex" {
-  local hash
-  hash="$(hash_name "my-module")"
-  [ ${#hash} -eq 12 ]
-  [[ "$hash" =~ ^[0-9a-f]{12}$ ]]
+@test "module_path defaults to modules/<name> when no config" {
+  local p
+  p="$(module_path "fold")"
+  [ "$p" = "$FAKE_REPO/modules/fold" ]
 }
 
-@test "hash_name is deterministic" {
-  local h1 h2
-  h1="$(hash_name "test-repo")"
-  h2="$(hash_name "test-repo")"
-  [ "$h1" = "$h2" ]
+@test "module_path honors .modules/config path override" {
+  mkdir -p "$FAKE_REPO/.modules"
+  echo '{"path": "deps"}' > "$FAKE_REPO/.modules/config"
+  local p
+  p="$(module_path "fold")"
+  [ "$p" = "$FAKE_REPO/deps/fold" ]
 }
 
-@test "hash_name differs for different inputs" {
-  local h1 h2
-  h1="$(hash_name "repo-a")"
-  h2="$(hash_name "repo-b")"
-  [ "$h1" != "$h2" ]
+@test "module_path handles names with dots" {
+  local p
+  p="$(module_path "org.repo")"
+  [ "$p" = "$FAKE_REPO/modules/org.repo" ]
 }
 
-@test "hash_name handles spaces in names" {
-  local hash
-  hash="$(hash_name "my module")"
-  [ ${#hash} -eq 12 ]
-  [[ "$hash" =~ ^[0-9a-f]{12}$ ]]
+@test "module_path handles hyphens and underscores" {
+  local p
+  p="$(module_path "my-dep_v2")"
+  [ "$p" = "$FAKE_REPO/modules/my-dep_v2" ]
 }
 
-@test "hash_name handles dots and slashes" {
-  local h1 h2
-  h1="$(hash_name "org/repo.git")"
-  h2="$(hash_name "org/repo")"
-  [ ${#h1} -eq 12 ]
-  [[ "$h1" =~ ^[0-9a-f]{12}$ ]]
-  [ "$h1" != "$h2" ]
+@test "clones_path_rel returns default when no config" {
+  run clones_path_rel
+  [ "$output" = "modules" ]
 }
 
-@test "hash_name handles unicode" {
-  local hash
-  hash="$(hash_name "日本語リポ")"
-  [ ${#hash} -eq 12 ]
-  [[ "$hash" =~ ^[0-9a-f]{12}$ ]]
+@test "clones_path_rel reads from config when set" {
+  mkdir -p "$FAKE_REPO/.modules"
+  echo '{"path": "third-party/vendored"}' > "$FAKE_REPO/.modules/config"
+  run clones_path_rel
+  [ "$output" = "third-party/vendored" ]
 }

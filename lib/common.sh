@@ -6,11 +6,36 @@ set -euo pipefail
 # The target repo is always CALLER_PWD (set by shiv shim)
 TARGET_DIR="${CALLER_PWD:-.}"
 
-# Where modules live in the target repo
-SUBMODULES_DIR="$TARGET_DIR/submodules"
+# Where modules metadata lives (tracked; manifest encrypted, config plaintext).
+MODULES_DIR="$TARGET_DIR/.modules"
+MANIFEST="$MODULES_DIR/manifest"
+CONFIG="$MODULES_DIR/config"
 
-# The manifest file (encrypted via git-crypt)
-MANIFEST="$SUBMODULES_DIR/.manifest"
+# Paths tracked in git-relative form (for hooks / diff matching).
+MANIFEST_REL=".modules/manifest"
+CONFIG_REL=".modules/config"
+
+# Default clone-root path (relative to repo root) if no config is set.
+DEFAULT_CLONES_PATH="modules"
+
+# Resolve the relative path (from repo root) where module clones live.
+# Reads .modules/config; falls back to DEFAULT_CLONES_PATH.
+clones_path_rel() {
+  if [ -f "$CONFIG" ] && command -v jq &>/dev/null; then
+    local configured
+    configured="$(jq -r '.path // empty' "$CONFIG" 2>/dev/null || true)"
+    if [ -n "$configured" ]; then
+      echo "$configured"
+      return
+    fi
+  fi
+  echo "$DEFAULT_CLONES_PATH"
+}
+
+# Absolute path to the clone root.
+clones_dir() {
+  echo "$TARGET_DIR/$(clones_path_rel)"
+}
 
 # ── Require checks ────────────────────────────────────────────
 
@@ -42,18 +67,14 @@ require_rudi() {
   fi
 }
 
-# ── Hashing ───────────────────────────────────────────────────
+# ── Path helpers ──────────────────────────────────────────────
 
-# Generate an obfuscated directory name from a module name.
-# Uses first 12 chars of SHA-1 hash.
-hash_name() {
-  if command -v shasum &>/dev/null; then
-    printf '%s' "$1" | shasum | cut -c1-12
-  elif command -v sha1sum &>/dev/null; then
-    printf '%s' "$1" | sha1sum | cut -c1-12
-  else
-    printf '%s' "$1" | openssl dgst -sha1 | awk '{print $NF}' | cut -c1-12
-  fi
+# Given a module name, return its clone path (absolute).
+# With the opacity redesign, the path is <clones_dir>/<name>/ —
+# no hashing, no manifest lookup. Names are the directory names.
+module_path() {
+  local name="$1"
+  echo "$(clones_dir)/$name"
 }
 
 # ── Manifest operations ──────────────────────────────────────
@@ -85,11 +106,11 @@ manifest_get() {
 }
 
 # Set a module entry. Reads current manifest, merges, writes back.
-# Usage: manifest_set <name> <url> <path> <pin>
+# Usage: manifest_set <name> <url> <pin>
 manifest_set() {
-  local name="$1" url="$2" path="$3" pin="$4"
-  manifest_read | jq --arg n "$name" --arg u "$url" --arg p "$path" --arg s "$pin" \
-    '.[$n] = {"url": $u, "path": $p, "pin": $s}' | manifest_write
+  local name="$1" url="$2" pin="$3"
+  manifest_read | jq --arg n "$name" --arg u "$url" --arg s "$pin" \
+    '.[$n] = {"url": $u, "pin": $s}' | manifest_write
 }
 
 # Remove a module entry by name.
