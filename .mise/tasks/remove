@@ -7,24 +7,21 @@ set -euo pipefail
 source "$MISE_CONFIG_ROOT/lib/common.sh"
 
 require_git
-require_jq
 require_initialized
 
 name="$usage_name"
 
-if ! manifest_get "$name" &>/dev/null; then
+if ! manifest_has "$name"; then
   echo "Error: module '$name' not found" >&2
   exit 1
 fi
 
 mod_path="$(module_path "$name")"
 
-# Remove the clone directory (gitignored, so no index cleanup needed)
 if [ -d "$mod_path" ]; then
   rm -rf "$mod_path"
 fi
 
-# Remove from manifest
 manifest_remove "$name"
 git -C "$TARGET_DIR" add "$MANIFEST"
 

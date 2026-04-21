@@ -19,7 +19,6 @@ CONFIG_REL=".modules/config"
 DEFAULT_CLONES_PATH="modules"
 
 # Resolve the relative path (from repo root) where module clones live.
-# Reads .modules/config; falls back to DEFAULT_CLONES_PATH.
 clones_path_rel() {
   if [ -f "$CONFIG" ] && command -v jq &>/dev/null; then
     local configured
@@ -70,56 +69,110 @@ require_rudi() {
 # ── Path helpers ──────────────────────────────────────────────
 
 # Given a module name, return its clone path (absolute).
-# With the opacity redesign, the path is <clones_dir>/<name>/ —
-# no hashing, no manifest lookup. Names are the directory names.
 module_path() {
   local name="$1"
   echo "$(clones_dir)/$name"
 }
 
 # ── Manifest operations ──────────────────────────────────────
+#
+# Manifest format: tab-separated lines, sorted by name.
+#   <name>\t<url>\t<pin>\n
+#
+# Line-oriented form lets us use a trivial union merge driver (adapted
+# from KnickKnackLabs/notes) for concurrent edits. See
+# lib/manifest-merge-driver.sh.
 
-# Read the full manifest. Outputs JSON to stdout.
+# Print the full manifest to stdout.
 manifest_read() {
-  if [ ! -f "$MANIFEST" ]; then
-    echo "{}"
-    return
+  if [ -f "$MANIFEST" ]; then
+    cat "$MANIFEST"
   fi
-  cat "$MANIFEST"
 }
 
-# Write JSON from stdin to the manifest.
-# Uses a temp file to avoid truncating before pipeline reads finish.
+# Write manifest from stdin. Normalizes: deduplicates by name (first wins),
+# sorts alphabetically by name.
 manifest_write() {
   local tmp="${MANIFEST}.tmp"
-  jq '.' > "$tmp"
+  # awk: keep first occurrence of each name; then sort by name.
+  awk -F'\t' '!seen[$1]++' | sort -t$'\t' -k1,1 > "$tmp"
   mv "$tmp" "$MANIFEST"
 }
 
-# Get a module entry by name. Outputs JSON to stdout.
-# Returns 1 if not found.
-manifest_get() {
+# True (0) if a module with this name exists.
+manifest_has() {
   local name="$1"
-  local entry
-  entry="$(manifest_read | jq -e --arg n "$name" '.[$n]')" || return 1
-  echo "$entry"
+  [ -f "$MANIFEST" ] || return 1
+  awk -F'\t' -v n="$name" '$1 == n { found=1; exit } END { exit !found }' "$MANIFEST"
 }
 
-# Set a module entry. Reads current manifest, merges, writes back.
+# Print a single manifest line for a name (empty if not found).
+manifest_get() {
+  local name="$1"
+  [ -f "$MANIFEST" ] || return 1
+  local line
+  line="$(awk -F'\t' -v n="$name" '$1 == n { print; exit }' "$MANIFEST")"
+  if [ -z "$line" ]; then
+    return 1
+  fi
+  echo "$line"
+}
+
+# Print the URL for a name.
+manifest_url() {
+  local name="$1"
+  manifest_get "$name" | cut -f2
+}
+
+# Print the pin for a name.
+manifest_pin() {
+  local name="$1"
+  manifest_get "$name" | cut -f3
+}
+
+# Insert or update an entry.
 # Usage: manifest_set <name> <url> <pin>
 manifest_set() {
   local name="$1" url="$2" pin="$3"
-  manifest_read | jq --arg n "$name" --arg u "$url" --arg s "$pin" \
-    '.[$n] = {"url": $u, "pin": $s}' | manifest_write
+
+  # Validate: no tabs in any field (tab is our delimiter).
+  if [[ "$name" == *$'\t'* || "$url" == *$'\t'* || "$pin" == *$'\t'* ]]; then
+    echo "Error: manifest fields must not contain tab characters" >&2
+    return 1
+  fi
+
+  local tmp="${MANIFEST}.tmp"
+  {
+    # Copy all other entries
+    if [ -f "$MANIFEST" ]; then
+      awk -F'\t' -v n="$name" '$1 != n' "$MANIFEST"
+    fi
+    # Append new entry
+    printf '%s\t%s\t%s\n' "$name" "$url" "$pin"
+  } | sort -t$'\t' -k1,1 > "$tmp"
+  mv "$tmp" "$MANIFEST"
 }
 
-# Remove a module entry by name.
+# Remove an entry by name. Silent if not present.
 manifest_remove() {
   local name="$1"
-  manifest_read | jq --arg n "$name" 'del(.[$n])' | manifest_write
+  [ -f "$MANIFEST" ] || return 0
+  local tmp="${MANIFEST}.tmp"
+  awk -F'\t' -v n="$name" '$1 != n' "$MANIFEST" > "$tmp" || true
+  mv "$tmp" "$MANIFEST"
 }
 
-# List all module names. One per line.
+# List all module names, one per line, sorted.
 manifest_names() {
-  manifest_read | jq -r 'keys[]'
+  [ -f "$MANIFEST" ] || return 0
+  cut -f1 "$MANIFEST" 2>/dev/null || true
+}
+
+# Count entries (non-empty lines).
+manifest_count() {
+  if [ ! -f "$MANIFEST" ]; then
+    echo 0
+    return
+  fi
+  awk 'NF' "$MANIFEST" | wc -l | tr -d ' '
 }

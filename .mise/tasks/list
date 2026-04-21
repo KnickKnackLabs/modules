@@ -7,24 +7,23 @@ set -euo pipefail
 source "$MISE_CONFIG_ROOT/lib/common.sh"
 
 require_git
-require_jq
 require_initialized
 
-manifest="$(manifest_read)"
-
-if [ "${usage_json:-}" = "true" ]; then
-  echo "$manifest"
-  exit 0
-fi
-
-# Check if empty
-if [ "$(echo "$manifest" | jq 'length')" -eq 0 ]; then
+if [ "$(manifest_count)" -eq 0 ]; then
   echo "No modules. Use 'modules add <url>' to add one."
   exit 0
 fi
 
-# Pretty print
+if [ "${usage_json:-}" = "true" ]; then
+  # Emit as JSON: {name: {url, pin}}, to preserve the old --json schema.
+  awk -F'\t' 'BEGIN { printf "{" }
+              NR > 1 { printf "," }
+              { printf "\"%s\":{\"url\":\"%s\",\"pin\":\"%s\"}", $1, $2, $3 }
+              END { print "}" }' "$MANIFEST" | jq '.'
+  exit 0
+fi
+
 {
   printf "Name\tURL\tPin\n"
-  echo "$manifest" | jq -r 'to_entries[] | "\(.key)\t\(.value.url)\t\(.value.pin[:12])"'
+  awk -F'\t' '{ printf "%s\t%s\t%.12s\n", $1, $2, $3 }' "$MANIFEST"
 } | gum table --print --separator "	"

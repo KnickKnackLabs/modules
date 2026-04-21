@@ -7,17 +7,18 @@ set -euo pipefail
 source "$MISE_CONFIG_ROOT/lib/common.sh"
 
 require_git
-require_jq
 require_initialized
 
 update_module() {
   local name="$1"
-  local entry
-  entry="$(manifest_get "$name")" || { echo "Error: module '$name' not found" >&2; return 1; }
+  if ! manifest_has "$name"; then
+    echo "Error: module '$name' not found" >&2
+    return 1
+  fi
 
   local url pin
-  url="$(echo "$entry" | jq -r '.url')"
-  pin="$(echo "$entry" | jq -r '.pin')"
+  url="$(manifest_url "$name")"
+  pin="$(manifest_pin "$name")"
   local mod_path
   mod_path="$(module_path "$name")"
 
@@ -28,12 +29,10 @@ update_module() {
 
   echo "  $name: pulling..."
 
-  # If HEAD is detached (e.g., after init), checkout the default branch first
   if ! git -C "$mod_path" symbolic-ref -q HEAD &>/dev/null; then
     local default_branch
     default_branch="$(git -C "$mod_path" rev-parse --abbrev-ref origin/HEAD 2>/dev/null | sed 's|^origin/||')"
     if [ -z "$default_branch" ] || [ "$default_branch" = "HEAD" ]; then
-      # Fallback: try main, then master
       if git -C "$mod_path" show-ref --verify --quiet refs/remotes/origin/main; then
         default_branch="main"
       elif git -C "$mod_path" show-ref --verify --quiet refs/remotes/origin/master; then
@@ -71,6 +70,7 @@ if [ -n "${usage_name:-}" ]; then
 else
   failed=0
   while IFS= read -r name; do
+    [ -z "$name" ] && continue
     update_module "$name" || failed=$((failed + 1))
   done < <(manifest_names)
 

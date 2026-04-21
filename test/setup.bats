@@ -15,8 +15,8 @@ setup() {
   run modules setup
   [ "$status" -eq 0 ]
   [ -f "$PARENT/.modules/manifest" ]
-  run cat "$PARENT/.modules/manifest"
-  [ "$output" = "{}" ]
+  # Empty manifest = empty file (TSV format, no entries)
+  [ ! -s "$PARENT/.modules/manifest" ]
 }
 
 @test "setup stages the manifest and gitignore" {

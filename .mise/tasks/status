@@ -6,20 +6,17 @@ set -euo pipefail
 source "$MISE_CONFIG_ROOT/lib/common.sh"
 
 require_git
-require_jq
 require_initialized
 
-manifest="$(manifest_read)"
-
-if [ "$(echo "$manifest" | jq 'length')" -eq 0 ]; then
+if [ "$(manifest_count)" -eq 0 ]; then
   echo "No modules."
   exit 0
 fi
 
 {
   printf "Name\tStatus\tPin\n"
-  echo "$manifest" | jq -r 'to_entries[] | "\(.key)\t\(.value.url)\t\(.value.pin)"' | \
   while IFS=$'\t' read -r name url pin; do
+    [ -z "$name" ] && continue
     mod_path="$(module_path "$name")"
 
     if [ ! -d "$mod_path/.git" ]; then
@@ -34,5 +31,5 @@ fi
     else
       printf "%s\tchanged\t%.12s → %.12s\n" "$name" "$pin" "$actual"
     fi
-  done
+  done < "$MANIFEST"
 } | gum table --print --separator "	"

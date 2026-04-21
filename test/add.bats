@@ -33,27 +33,22 @@ setup() {
 @test "add records entry in manifest" {
   modules add "$REMOTE"
 
-  local manifest
-  manifest="$(cat "$PARENT/.modules/manifest")"
+  # Manifest is TSV: <name>\t<url>\t<pin>
+  manifest_has_name "$PARENT/.modules/manifest" "remote"
 
-  # Should have a "remote" key with url and pin (no path — derived from name)
-  echo "$manifest" | jq -e '.remote.url' >/dev/null
-  echo "$manifest" | jq -e '.remote.pin' >/dev/null
-
-  # No path field in the new design
-  run jq -e '.remote.path' "$PARENT/.modules/manifest"
-  [ "$status" -ne 0 ]
-
-  # URL should match
-  local url
-  url="$(echo "$manifest" | jq -r '.remote.url')"
+  local url pin expected
+  url="$(manifest_url_of "$PARENT/.modules/manifest" "remote")"
+  pin="$(manifest_pin_of "$PARENT/.modules/manifest" "remote")"
   [ "$url" = "$REMOTE" ]
-
-  # Pin should match remote HEAD
-  local pin expected
-  pin="$(echo "$manifest" | jq -r '.remote.pin')"
   expected="$(repo_head "$REMOTE")"
   [ "$pin" = "$expected" ]
+
+  # Manifest line should have exactly 3 tab-separated fields
+  local line
+  line="$(manifest_line_of "$PARENT/.modules/manifest" "remote")"
+  local fields
+  fields="$(echo -n "$line" | awk -F'\t' '{print NF}')"
+  [ "$fields" = "3" ]
 }
 
 @test "add stages manifest only (no gitlink, modules/ is gitignored)" {
@@ -81,8 +76,8 @@ setup() {
   [ -d "$PARENT/modules/my-dep" ]
 
   # Manifest uses custom name
-  run jq -r 'keys[0]' "$PARENT/.modules/manifest"
-  [ "$output" = "my-dep" ]
+  run head -1 "$PARENT/.modules/manifest"
+  [[ "$output" == my-dep$'\t'* ]]
 }
 
 @test "add with --ref pins to specific commit" {
@@ -93,7 +88,7 @@ setup() {
   modules add "$REMOTE" --ref "$first_sha"
 
   local pin
-  pin="$(jq -r '.remote.pin' "$PARENT/.modules/manifest")"
+  pin="$(manifest_pin_of "$PARENT/.modules/manifest" "remote")"
   [ "$pin" = "$first_sha" ]
 
   # The clone should be at that commit
@@ -136,7 +131,7 @@ setup() {
   run modules add "$REMOTE" --name "org.repo"
   [ "$status" -eq 0 ]
 
-  run jq -r '.["org.repo"].url' "$PARENT/.modules/manifest"
+  run manifest_url_of "$PARENT/.modules/manifest" "org.repo"
   [ "$output" = "$REMOTE" ]
 }
 
@@ -154,7 +149,7 @@ setup() {
   modules add "$remote2" --name second
 
   # Both in manifest
-  run jq -r 'keys | length' "$PARENT/.modules/manifest"
+  run manifest_count_of "$PARENT/.modules/manifest"
   [ "$output" = "2" ]
 
   # Both directories exist

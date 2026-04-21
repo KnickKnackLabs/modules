@@ -83,6 +83,27 @@ skip_unless_gpg_key() {
   export TEST_GPG_FINGERPRINT="$fpr"
 }
 
+# Test helpers for the line-oriented TSV manifest.
+# Usage: manifest_line_of <manifest-path> <name>
+manifest_line_of() {
+  awk -F'\t' -v n="$2" '$1 == n { print; exit }' "$1" 2>/dev/null
+}
+manifest_url_of() {
+  manifest_line_of "$1" "$2" | cut -f2
+}
+manifest_pin_of() {
+  manifest_line_of "$1" "$2" | cut -f3
+}
+manifest_count_of() {
+  if [ ! -f "$1" ]; then echo 0; return; fi
+  awk 'NF' "$1" | wc -l | tr -d ' '
+}
+manifest_has_name() {
+  [ -f "$1" ] || return 1
+  awk -F'\t' -v n="$2" '$1 == n { f=1; exit } END { exit !f }' "$1"
+}
+export -f manifest_line_of manifest_url_of manifest_pin_of manifest_count_of manifest_has_name
+
 # Import module_path from common.sh — single source of truth.
 # Note: common.sh requires CALLER_PWD; tests using module_path must set it first.
 # shellcheck source=../lib/common.sh

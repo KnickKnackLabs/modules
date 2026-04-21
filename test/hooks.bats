@@ -125,7 +125,8 @@ EOF
 @test "manifest encryption hook warns without git-crypt" {
   # In test repos, git-crypt isn't initialized — hook should warn but pass
   mkdir -p "$PARENT/.modules"
-  echo '{"test": {}}' > "$PARENT/.modules/manifest"
+  printf 'test\thttps://example.com/x.git\t0000000000000000000000000000000000000000\n' \
+    > "$PARENT/.modules/manifest"
   git -C "$PARENT" add .modules/manifest
 
   run git -C "$PARENT" commit -m "update manifest"

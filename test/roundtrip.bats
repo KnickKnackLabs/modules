@@ -43,8 +43,9 @@ setup() {
   cd "$PARENT" && git-crypt lock
 
   run file "$PARENT/.modules/manifest"
-  [[ "$output" != *"JSON"* ]]
+  # After lock, manifest should not identify as plain text
   [[ "$output" != *"ASCII"* ]]
+  [[ "$output" != *"UTF-8"* ]]
 }
 
 @test "roundtrip: fresh clone → unlock → init restores modules" {
@@ -59,13 +60,13 @@ setup() {
   git -C "$PARENT" commit -m "add module"
 
   local pin
-  pin="$(jq -r '.["my-repo"].pin' "$PARENT/.modules/manifest")"
+  pin="$(manifest_pin_of "$PARENT/.modules/manifest" "my-repo")"
 
   local clone="$BATS_TEST_TMPDIR/clone"
   git clone "$PARENT" "$clone"
 
   # Fresh clone has no modules/ dir — it's gitignored and not tracked
-  [ ! -d "$clone/submodules" ] || [ -z "$(ls -A "$clone/submodules" 2>/dev/null)" ]
+  [ ! -d "$clone/modules" ] || [ -z "$(ls -A "$clone/modules" 2>/dev/null)" ]
 
   cd "$clone" && git-crypt unlock
 
@@ -99,5 +100,6 @@ setup() {
 
   # The manifest is present but ciphertext
   run file "$PARENT/.modules/manifest"
-  [[ "$output" != *"JSON"* ]]
+  [[ "$output" != *"ASCII"* ]]
+  [[ "$output" != *"UTF-8"* ]]
 }

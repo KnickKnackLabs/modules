@@ -44,7 +44,7 @@ setup() {
   git -C "$PARENT" commit -m "add module"
 
   local pin
-  pin="$(jq -r '.["my-repo"].pin' "$PARENT/.modules/manifest")"
+  pin="$(manifest_pin_of "$PARENT/.modules/manifest" "my-repo")"
 
   # Remove clone
   rm -rf "$PARENT/modules/my-repo"
@@ -66,12 +66,9 @@ setup() {
 }
 
 @test "init reports failure when clone fails" {
-  # Add a module with a bogus URL directly in the manifest
-  local manifest
-  manifest="$(cat "$PARENT/.modules/manifest")"
-  echo "$manifest" | jq \
-    '. + {"bad-repo": {"url": "file:///nonexistent/repo.git", "pin": "0000000000000000000000000000000000000000"}}' \
-    > "$PARENT/.modules/manifest"
+  # Add a module with a bogus URL directly in the manifest (TSV format)
+  printf 'bad-repo\tfile:///nonexistent/repo.git\t0000000000000000000000000000000000000000\n' \
+    >> "$PARENT/.modules/manifest"
 
   run modules init
   [ "$status" -ne 0 ]

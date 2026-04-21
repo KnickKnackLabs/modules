@@ -29,7 +29,7 @@ setup() {
   [ ! -d "$PARENT/modules/my-repo" ]
 
   # Manifest should be empty
-  run jq 'length' "$PARENT/.modules/manifest"
+  run manifest_count_of "$PARENT/.modules/manifest"
   [ "$output" = "0" ]
 }
 
@@ -65,7 +65,7 @@ setup() {
   [ "$status" -eq 0 ]
 
   # Manifest should be empty
-  run jq 'length' "$PARENT/.modules/manifest"
+  run manifest_count_of "$PARENT/.modules/manifest"
   [ "$output" = "0" ]
 }
 
@@ -81,6 +81,7 @@ setup() {
 
   # Second should still exist
   [ -d "$PARENT/modules/second" ]
-  run jq -r 'keys[0]' "$PARENT/.modules/manifest"
-  [ "$output" = "second" ]
+  manifest_has_name "$PARENT/.modules/manifest" "second"
+  run manifest_count_of "$PARENT/.modules/manifest"
+  [ "$output" = "1" ]
 }

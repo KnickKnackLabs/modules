@@ -9,14 +9,10 @@ set -euo pipefail
 source "$MISE_CONFIG_ROOT/lib/common.sh"
 
 require_git
-require_jq
 require_initialized
 
 url="$usage_url"
 
-# Derive name from URL if not provided.
-# Handles HTTPS (https://github.com/org/repo.git), SSH (git@github.com:org/repo.git),
-# and trailing-slash forms. basename + .git strip covers all of them.
 if [ -n "${usage_name:-}" ]; then
   name="$usage_name"
 else
@@ -24,16 +20,13 @@ else
   name="${name%/}"
 fi
 
-# Validate name: must be a plausible directory name.
-# No slashes, no dots (to avoid . / .. shenanigans), non-empty.
 if [ -z "$name" ] || [[ "$name" == *"/"* ]] || [[ "$name" == "."* ]]; then
   echo "Error: invalid module name: '$name'" >&2
   echo "Use --name to provide an explicit name." >&2
   exit 1
 fi
 
-# Check for duplicate
-if manifest_get "$name" &>/dev/null; then
+if manifest_has "$name"; then
   echo "Error: module '$name' already exists" >&2
   exit 1
 fi
@@ -46,22 +39,17 @@ if [ -d "$mod_path" ]; then
   exit 1
 fi
 
-# Clone
 mkdir -p "$(clones_dir)"
 gum spin --title "Cloning $url → $clones_rel/$name" -- git clone "$url" "$mod_path"
 
-# Check out specific ref if requested
 if [ -n "${usage_ref:-}" ]; then
   git -C "$mod_path" checkout "$usage_ref"
 fi
 
-# Record the pinned SHA
 pin="$(git -C "$mod_path" rev-parse HEAD)"
 
-# Update manifest
 manifest_set "$name" "$url" "$pin"
 
-# Stage the manifest only — clones dir is gitignored, nothing to stage there.
 git -C "$TARGET_DIR" add "$MANIFEST"
 
 gum style --foreground 2 "Added module '$name' ($clones_rel/$name @ ${pin:0:12})"

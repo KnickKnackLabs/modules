@@ -6,11 +6,9 @@ set -euo pipefail
 source "$MISE_CONFIG_ROOT/lib/common.sh"
 
 require_git
-require_jq
 require_initialized
 
-manifest="$(manifest_read)"
-count="$(echo "$manifest" | jq 'length')"
+count="$(manifest_count)"
 
 if [ "$count" -eq 0 ]; then
   echo "No modules to initialize."
@@ -23,6 +21,7 @@ clones_rel="$(clones_path_rel)"
 errors=0
 
 while IFS=$'\t' read -r name url pin; do
+  [ -z "$name" ] && continue
   mod_path="$(module_path "$name")"
 
   if [ -d "$mod_path/.git" ]; then
@@ -32,7 +31,6 @@ while IFS=$'\t' read -r name url pin; do
 
   echo "  $name: cloning $url → $clones_rel/$name"
 
-  # Clean up any empty directory left by a prior failed clone
   if [ -d "$mod_path" ]; then
     rmdir "$mod_path" 2>/dev/null || true
   fi
@@ -45,12 +43,11 @@ while IFS=$'\t' read -r name url pin; do
 
   git -C "$mod_path" checkout "$pin" 2>&1
 
-  # Verify we're at the right commit
   actual="$(git -C "$mod_path" rev-parse HEAD)"
   if [ "$actual" != "$pin" ]; then
     echo "  $name: warning — expected $pin, at $actual" >&2
   fi
-done < <(echo "$manifest" | jq -r 'to_entries[] | "\(.key)\t\(.value.url)\t\(.value.pin)"')
+done < "$MANIFEST"
 
 if [ "$errors" -gt 0 ]; then
   echo "$errors module(s) failed to initialize" >&2

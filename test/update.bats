@@ -22,7 +22,7 @@ setup() {
   git -C "$PARENT" commit -m "add module"
 
   local old_pin
-  old_pin="$(jq -r '.["my-repo"].pin' "$PARENT/.modules/manifest")"
+  old_pin="$(manifest_pin_of "$PARENT/.modules/manifest" "my-repo")"
 
   # Push a new commit to the remote
   echo "upstream change" > "$REMOTE/upstream.md"
@@ -34,7 +34,7 @@ setup() {
   [[ "$output" == *"updated"* ]]
 
   local new_pin
-  new_pin="$(jq -r '.["my-repo"].pin' "$PARENT/.modules/manifest")"
+  new_pin="$(manifest_pin_of "$PARENT/.modules/manifest" "my-repo")"
   [ "$old_pin" != "$new_pin" ]
 }
 
