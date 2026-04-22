@@ -11,6 +11,11 @@ MODULES_DIR="$TARGET_DIR/.modules"
 MANIFEST="$MODULES_DIR/manifest"
 CONFIG="$MODULES_DIR/config"
 
+# Current layout version. Written into .modules/config at setup; read by
+# require_initialized to detect incompatible repos (old layout, future
+# layout) and produce actionable errors rather than silent misbehavior.
+MODULES_LAYOUT_VERSION="0.9.0"
+
 # Paths tracked in git-relative form (for hooks / diff matching).
 MANIFEST_REL=".modules/manifest"
 CONFIG_REL=".modules/config"
@@ -46,9 +51,32 @@ require_git() {
 }
 
 require_initialized() {
+  # Detect pre-v0.9.0 layout (tracked 'submodules/.manifest', JSON format).
+  # Give the user an actionable migration pointer instead of a generic
+  # 'not initialized' error that would invite them to run `modules setup`
+  # and create a parallel .modules/ directory alongside the old layout.
+  if [ ! -f "$MANIFEST" ] && [ -f "$TARGET_DIR/submodules/.manifest" ]; then
+    echo "Error: this repo uses the pre-v0.9.0 modules layout ('submodules/.manifest')." >&2
+    echo "Migration guide: https://github.com/KnickKnackLabs/modules/issues/16" >&2
+    echo "(or see den/notes/modules-opacity-migration.md)" >&2
+    exit 1
+  fi
+
   if [ ! -f "$MANIFEST" ]; then
     echo "Error: modules not initialized. Run: modules setup" >&2
     exit 1
+  fi
+
+  # Version check: if config declares a layout version we don't recognize,
+  # refuse rather than risk silent misbehavior.
+  if [ -f "$CONFIG" ] && command -v jq &>/dev/null; then
+    local declared
+    declared="$(jq -r '.version // empty' "$CONFIG" 2>/dev/null || true)"
+    if [ -n "$declared" ] && [ "$declared" != "$MODULES_LAYOUT_VERSION" ]; then
+      echo "Error: this repo declares modules layout version '$declared', but this client supports '$MODULES_LAYOUT_VERSION'." >&2
+      echo "Upgrade or downgrade the modules client to match." >&2
+      exit 1
+    fi
   fi
 }
 

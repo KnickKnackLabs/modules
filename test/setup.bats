@@ -133,3 +133,39 @@ setup() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"not a git repository"* ]]
 }
+
+# ── Layout version gate (RC-4 from peer review) ──
+
+@test "setup writes layout version into .modules/config" {
+  modules setup
+  run jq -r '.version' "$PARENT/.modules/config"
+  [ "$status" -eq 0 ]
+  [ "$output" = "0.9.0" ]
+}
+
+@test "require_initialized detects pre-v0.9.0 layout" {
+  # Simulate an old-layout repo: no .modules/, but submodules/.manifest
+  # present. Any operation that requires initialization should point at
+  # the migration guide rather than say 'not initialized'.
+  mkdir -p "$PARENT/submodules"
+  echo '{"some":"json"}' > "$PARENT/submodules/.manifest"
+
+  run modules list
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"pre-v0.9.0 modules layout"* ]]
+  [[ "$output" == *"Migration guide"* ]]
+}
+
+@test "require_initialized rejects unknown layout version" {
+  modules setup
+  # Tamper with the version to simulate a future (or older) layout.
+  local tmp
+  tmp=$(mktemp)
+  jq '.version = "99.0.0"' "$PARENT/.modules/config" > "$tmp"
+  mv "$tmp" "$PARENT/.modules/config"
+
+  run modules list
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"layout version '99.0.0'"* ]]
+  [[ "$output" == *"client supports '0.9.0'"* ]]
+}

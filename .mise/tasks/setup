@@ -44,8 +44,11 @@ if [ ! -f "$MANIFEST" ]; then
   : > "$MANIFEST"
 fi
 
-# Config: single JSON object with 'path'.
-jq -n --arg p "$requested_path" '{"path": $p}' > "$CONFIG"
+# Config: JSON object with 'path' and 'version'. The version declares the
+# modules layout format so clients can refuse to operate on repos they
+# don't understand (see require_initialized).
+jq -n --arg p "$requested_path" --arg v "$MODULES_LAYOUT_VERSION" \
+  '{"path": $p, "version": $v}' > "$CONFIG"
 
 CLONES_PATH_REL="$(clones_path_rel)"
 
