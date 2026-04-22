@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+#MISE description="Custom git merge driver for .modules/manifest (invoked by git, not users)"
+#MISE dir="{{config_root}}"
+#MISE hide=true
+#USAGE arg "<ancestor>" help="Common ancestor file (%O)"
+#USAGE arg "<current>" help="Current branch file (%A) — written in place"
+#USAGE arg "<other>" help="Other branch file (%B)"
+set -euo pipefail
+
+# Invoked by git's merge machinery via the `modules-manifest` driver config.
+# Resolves at merge-time via PATH → shiv shim → current installed modules
+# version, so upgrading modules does not leave a stale absolute path in
+# .git/config (which would silently fall back to the default merge strategy
+# and corrupt the encrypted manifest).
+
+exec bash "$MISE_CONFIG_ROOT/lib/manifest-merge-driver.sh" \
+  "${usage_ancestor}" "${usage_current}" "${usage_other}"

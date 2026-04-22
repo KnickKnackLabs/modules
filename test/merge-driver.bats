@@ -21,6 +21,14 @@ setup() {
 
   modules setup
   git -C "$PARENT" commit -m "init modules"
+
+  # install-hooks writes 'modules merge-driver %O %A %B' so the command
+  # resolves via PATH at merge time (avoids a stale absolute path on
+  # upgrade). In tests, the shiv-installed `modules` on PATH is a stale
+  # release version without the merge-driver task — rewrite the config to
+  # point at the local driver script so tests exercise the in-tree code.
+  git -C "$PARENT" config merge.modules-manifest.driver \
+    "bash $MISE_CONFIG_ROOT/lib/manifest-merge-driver.sh %O %A %B"
 }
 
 # ── Union merge (no conflicts) ─────────────────────────────────
@@ -219,7 +227,20 @@ set_pin() {
 
   run git -C "$PARENT" config --get merge.modules-manifest.driver
   [ "$status" -eq 0 ]
-  [[ "$output" == *"manifest-merge-driver.sh"* ]]
+  # Resolves via PATH at merge time — no absolute path that can go stale.
+  [[ "$output" == "modules merge-driver %O %A %B" ]]
+}
+
+@test "install-hooks: driver config does not embed an absolute path" {
+  # Regression guard (RC-2 from peer review). An absolute path inside
+  # $MISE_CONFIG_ROOT goes stale when shiv installs a new version to a
+  # new directory, silently breaking the driver on upgrade.
+  modules install-hooks
+
+  run git -C "$PARENT" config --get merge.modules-manifest.driver
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"/"* ]]
+  [[ "$output" != *"$MISE_CONFIG_ROOT"* ]]
 }
 
 @test "install-hooks adds merge attr to .gitattributes" {
@@ -240,7 +261,13 @@ set_pin() {
 
 @test "setup installs merge driver by default" {
   # setup ran in the setup() function; driver should already be installed.
-  run git -C "$PARENT" config --get merge.modules-manifest.driver
+  # (Note: bats setup() rewrites the driver to a local path for test
+  # isolation — check a fresh repo here to see what setup actually writes.)
+  local fresh="$BATS_TEST_TMPDIR/fresh-parent"
+  create_parent_repo "$fresh"
+  CALLER_PWD="$fresh" modules setup
+
+  run git -C "$fresh" config --get merge.modules-manifest.driver
   [ "$status" -eq 0 ]
-  [[ "$output" == *"manifest-merge-driver.sh"* ]]
+  [[ "$output" == "modules merge-driver %O %A %B" ]]
 }
