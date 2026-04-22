@@ -31,8 +31,18 @@ while IFS=$'\t' read -r name url pin; do
 
   echo "  $name: cloning $url → $clones_rel/$name"
 
+  # If the clone target exists but isn't a git repo, remove it. rmdir
+  # handles the empty case; a non-empty dir is an unexpected state
+  # (partial clone, leftover user files) — surface it instead of silently
+  # letting `git clone` fail with a confusing 'destination path exists'
+  # error.
   if [ -d "$mod_path" ]; then
-    rmdir "$mod_path" 2>/dev/null || true
+    if ! rmdir "$mod_path" 2>/dev/null; then
+      echo "  $name: clone target '$mod_path' exists and is not empty — refusing to clobber" >&2
+      echo "  Remove it manually or move its contents aside, then re-run 'modules init'." >&2
+      errors=$((errors + 1))
+      continue
+    fi
   fi
 
   if ! git clone "$url" "$mod_path" 2>&1; then

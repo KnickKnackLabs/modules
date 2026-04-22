@@ -19,7 +19,8 @@
 # - Name new on both sides with different values → CONFLICT.
 #
 # Adapted from KnickKnackLabs/notes' manifest-merge-driver.sh. Schema
-# differs (3 cols vs 2), key is col 1 (name) not col 2 (name).
+# differs (3 cols vs 2); key is col 1 (name) in both, but notes has
+# (obfuscated-id, readable-name) and we have (name, url, pin).
 #
 # Bash 3.2 compatible.
 set -eo pipefail
@@ -101,10 +102,13 @@ name_exists_in() {
 }
 
 # Collect all unique names from all three files.
+# Use awk with NF>=3 rather than cut -f1: cut returns the whole line for
+# rows with no tabs (e.g., a corrupt or partial entry), which then never
+# matches in value_for_name and produces phantom "deleted" entries.
 {
-  cut -f1 "$WORK/anc"    2>/dev/null
-  cut -f1 "$WORK/ours"   2>/dev/null
-  cut -f1 "$WORK/theirs" 2>/dev/null
+  awk -F'\t' 'NF >= 3 {print $1}' "$WORK/anc"    2>/dev/null
+  awk -F'\t' 'NF >= 3 {print $1}' "$WORK/ours"   2>/dev/null
+  awk -F'\t' 'NF >= 3 {print $1}' "$WORK/theirs" 2>/dev/null
 } | sort -u > "$WORK/all_names"
 
 has_conflict=false
