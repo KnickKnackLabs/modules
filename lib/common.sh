@@ -135,9 +135,15 @@ manifest_pin() {
 manifest_set() {
   local name="$1" url="$2" pin="$3"
 
-  # Validate: no tabs in any field (tab is our delimiter).
+  # Validate: no tabs (our delimiter) or newlines (our record separator)
+  # in any field. Either would split one entry across lines/columns and
+  # corrupt the manifest's keyed-on-name logic.
   if [[ "$name" == *$'\t'* || "$url" == *$'\t'* || "$pin" == *$'\t'* ]]; then
     echo "Error: manifest fields must not contain tab characters" >&2
+    return 1
+  fi
+  if [[ "$name" == *$'\n'* || "$url" == *$'\n'* || "$pin" == *$'\n'* ]]; then
+    echo "Error: manifest fields must not contain newline characters" >&2
     return 1
   fi
 

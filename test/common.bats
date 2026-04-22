@@ -50,3 +50,37 @@ setup() {
   run clones_path_rel
   [ "$output" = "third-party/vendored" ]
 }
+
+# ── manifest_set validation ──
+
+@test "manifest_set rejects tabs in any field" {
+  mkdir -p "$FAKE_REPO/.modules"
+  MANIFEST="$FAKE_REPO/.modules/manifest"
+  : > "$MANIFEST"
+
+  run manifest_set $'bad\tname' 'https://example.com' 'deadbeef'
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"tab characters"* ]]
+
+  run manifest_set 'ok' $'https://example.com\textra' 'deadbeef'
+  [ "$status" -ne 0 ]
+
+  run manifest_set 'ok' 'https://example.com' $'dead\tbeef'
+  [ "$status" -ne 0 ]
+}
+
+@test "manifest_set rejects newlines in any field" {
+  mkdir -p "$FAKE_REPO/.modules"
+  MANIFEST="$FAKE_REPO/.modules/manifest"
+  : > "$MANIFEST"
+
+  run manifest_set $'bad\nname' 'https://example.com' 'deadbeef'
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"newline characters"* ]]
+
+  run manifest_set 'ok' $'https://example.com\nmalicious' 'deadbeef'
+  [ "$status" -ne 0 ]
+
+  run manifest_set 'ok' 'https://example.com' $'dead\nbeef'
+  [ "$status" -ne 0 ]
+}
