@@ -16,10 +16,16 @@ fi
 
 if [ "${usage_json:-}" = "true" ]; then
   # Emit as JSON: {name: {url, pin}}, to preserve the old --json schema.
-  awk -F'\t' 'BEGIN { printf "{" }
-              NR > 1 { printf "," }
-              { printf "\"%s\":{\"url\":\"%s\",\"pin\":\"%s\"}", $1, $2, $3 }
-              END { print "}" }' "$MANIFEST" | jq '.'
+  # Build via jq -nR so URLs/names containing quotes, backslashes, or control
+  # characters are safely escaped (awk-based string interpolation is unsafe).
+  jq -nR '
+    [ inputs
+      | select(length > 0)
+      | split("\t")
+      | { (.[0]): { url: .[1], pin: .[2] } }
+    ]
+    | add // {}
+  ' "$MANIFEST"
   exit 0
 fi
 
