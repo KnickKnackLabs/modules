@@ -137,14 +137,10 @@ const readme = (
 
     <Section title="Quick start">
       <Paragraph>
-        <Bold>Prerequisites:</Bold>
-        {" "}<Code>shiv</Code>, <Code>jq</Code>, <Code>git</Code>, <Code>git-crypt</Code>,
-        {" a GPG key, and "}
-        <Link href="https://github.com/KnickKnackLabs/rudi">rudi</Link>
-        {" initialized in your repo ("}<Code>rudi init && rudi assign &lt;key&gt;</Code>{")."}
-        {" Encryption is needed so the manifest can be committed opaquely — running "}
+        {"Run "}<Code>rudi init</Code>
+        {" first if your repo isn't already encrypted — the manifest is committed opaque, and "}
         <Code>modules setup</Code>
-        {" without it will warn and commit the manifest in plaintext."}
+        {" without rudi will warn and commit in plaintext."}
       </Paragraph>
       <CodeBlock lang="bash">{`# Install
 shiv install modules

@@ -25,7 +25,7 @@ Naive `git clone` inside a parent repo does better — it creates a mode 160000 
 
 ## Quick start
 
-**Prerequisites:** `shiv`, `jq`, `git`, `git-crypt`, a GPG key, and [rudi](https://github.com/KnickKnackLabs/rudi) initialized in your repo (`rudi init && rudi assign <key>`). Encryption is needed so the manifest can be committed opaquely — running `modules setup` without it will warn and commit the manifest in plaintext.
+Run `rudi init` first if your repo isn't already encrypted — the manifest is committed opaque, and `modules setup` without rudi will warn and commit in plaintext.
 
 ```bash
 # Install
