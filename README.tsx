@@ -90,13 +90,13 @@ const readme = (
       <Heading level={1}>modules</Heading>
 
       <Paragraph>
-        <Bold>Encrypted, obfuscated git submodules — without .gitmodules.</Bold>
+        <Bold>Opaque cross-repo dependencies for a public repo.</Bold>
       </Paragraph>
 
       <Paragraph>
-        {"Manage cross-repo references with hashed directory names and an encrypted manifest."}
+        {"Manage repo-level dependencies with an encrypted manifest and a gitignored clone directory."}
         {"\n"}
-        {"Outsiders see opaque gitlinks. Insiders see the full dependency graph."}
+        {"A public observer sees only 'this repo uses modules' \u2014 no names, no pinned commits, no count."}
       </Paragraph>
 
       <Badges>
@@ -112,76 +112,127 @@ const readme = (
       <Paragraph>
         {"Git submodules require "}
         <Code>.gitmodules</Code>
-        {" — a plaintext file that exposes your dependency URLs and paths. "}
-        {"Git-crypt can't encrypt it (git needs to parse it as INI config). "}
-        {"So if your repo is public but your dependency graph is private, submodules leak information."}
+        {", a plaintext file that exposes dependency URLs and paths. Git-crypt can't encrypt it (git needs to parse it as INI config)."}
+      </Paragraph>
+
+      <Paragraph>
+        {"Naive "}
+        <Code>git clone</Code>
+        {" inside a parent repo does better — it creates a mode 160000 gitlink, no "}
+        <Code>.gitmodules</Code>
+        {" needed — but still leaks information: the directory name and the pinned commit SHA are both visible in the git tree, and the SHA is globally searchable on GitHub (it resolves back to the upstream repo)."}
       </Paragraph>
 
       <Paragraph>
         <Bold>modules</Bold>
-        {" skips "}
-        <Code>.gitmodules</Code>
-        {" entirely. It uses plain "}
-        <Code>git clone</Code>
-        {" inside your repo (which git tracks as mode 160000 gitlinks — the same mechanism submodules use) "}
-        {"and stores the URL/path/pin mapping in its own manifest, which "}
-        <Italic>can</Italic>
-        {" be encrypted."}
+        {" goes all the way: git tracks nothing under the clone directory. All submodule state — names, URLs, pinned commits — lives in an encrypted manifest at "}
+        <Code>.modules/manifest</Code>
+        {". Clones land in a gitignored "}
+        <Code>modules/</Code>
+        {" directory (path configurable). Public observers learn "}
+        <Italic>that</Italic>
+        {" the feature is in use; nothing else."}
       </Paragraph>
     </Section>
 
     <Section title="Quick start">
+      <Paragraph>
+        {"Run "}<Code>rudi init</Code>
+        {" first if your repo isn't already encrypted — the manifest is committed opaque, and "}
+        <Code>modules setup</Code>
+        {" without rudi will warn and commit in plaintext."}
+      </Paragraph>
       <CodeBlock lang="bash">{`# Install
 shiv install modules
 
-# Initialize in your repo
+# Initialize in your repo (defaults to modules/ as the clone root)
 modules setup
+git commit -m "init modules"
+
+# Or pick a different clone root
+modules setup --path deps
 
 # Add a dependency
 modules add https://github.com/org/repo.git --name my-dep
+git commit -m "add my-dep"
 
 # See what you have
 modules list
 modules status
 
-# On a fresh clone: populate everything from the manifest
-modules init`}</CodeBlock>
+# On a fresh clone: unlock, then populate from the manifest
+modules unlock && modules init`}</CodeBlock>
     </Section>
 
     <Section title="How it works">
+      <Paragraph>
+        {"Locally, after "}
+        <Code>modules unlock && modules init</Code>
+        {":"}
+      </Paragraph>
+
       <CodeBlock>{[
         "  your-repo/",
-        "  ├── submodules/",
-        "  │   ├── .manifest      ← encrypted (name → url, path, pin)",
-        "  │   ├── a8f3c12b/      ← hashed directory name",
-        "  │   │   └── (cloned repo contents)",
-        "  │   └── 7d2e9f01/",
-        "  │       └── (another repo)",
-        "  └── ...",
+        "  ├── .modules/",
+        "  │   ├── manifest       ← encrypted TSV (name\\turl\\tpin)",
+        "  │   └── config         ← plaintext JSON ({\"path\": \"modules\"})",
+        "  ├── modules/          ← gitignored; real git clones live here",
+        "  │   ├── fold/",
+        "  │   └── den/",
+        "  ├── .gitignore        ← contains 'modules/'",
+        "  └── .gitattributes    ← .modules/manifest filter=git-crypt merge=modules-manifest",
+      ].join("\n")}</CodeBlock>
+
+      <Paragraph>
+        {"What a public observer sees on GitHub (locked):"}
+      </Paragraph>
+
+      <CodeBlock>{[
+        "  your-repo/",
+        "  ├── .git-crypt/",
+        "  ├── .modules/",
+        "  │   ├── manifest       (ciphertext, opaque)",
+        "  │   └── config         ({\"path\": \"modules\"})",
+        "  ├── .gitignore",
+        "  └── .gitattributes",
       ].join("\n")}</CodeBlock>
 
       <List>
         <Item>
-          <Bold>No .gitmodules</Bold>
-          {" — git tracks gitlinks (pinned commit SHAs) but has no URL metadata"}
-        </Item>
-        <Item>
-          <Bold>Hashed paths</Bold>
-          {" — directory names are SHA-1 hashes of the module name, not human-readable"}
+          <Bold>No gitlinks</Bold>
+          {" — nothing under the clone directory is tracked by git. No pinned commit SHAs leak."}
         </Item>
         <Item>
           <Bold>Encrypted manifest</Bold>
-          {" — the "}
-          <Code>.manifest</Code>
-          {" file maps names to URLs and can be encrypted via git-crypt"}
+          {" — "}
+          <Code>.modules/manifest</Code>
+          {" holds all submodule state (name, URL, pin). Assigned to git-crypt by "}
+          <Code>modules setup</Code>
+          {" when "}
+          <Link href="https://github.com/KnickKnackLabs/rudi">rudi</Link>
+          {" is initialized."}
         </Item>
         <Item>
-          <Bold>Standard git</Bold>
-          {" — uses regular "}
-          <Code>git clone</Code>
-          {" and "}
-          <Code>git add</Code>
-          {" under the hood, nothing exotic"}
+          <Bold>Readable names on disk</Bold>
+          {" — no hashing. "}
+          <Code>cd modules/fold</Code>
+          {" just works."}
+        </Item>
+        <Item>
+          <Bold>Custom clone root</Bold>
+          {" — "}
+          <Code>modules setup --path deps</Code>
+          {" picks a different location (e.g., "}
+          <Code>deps/</Code>
+          {", "}
+          <Code>third-party/vendored/</Code>
+          {"). Stored in "}
+          <Code>.modules/config</Code>
+          {"."}
+        </Item>
+        <Item>
+          <Bold>Merge-safe manifest</Bold>
+          {" — a git-crypt-aware merge driver handles concurrent pin bumps without corrupting the manifest. Installed by default."}
         </Item>
       </List>
     </Section>
@@ -220,9 +271,11 @@ mise run test`}</CodeBlock>
       <Paragraph>
         {"The "}
         <Code>git-mechanics</Code>
-        {" suite independently verifies every git assumption the tool relies on: "}
-        {"gitlinks without .gitmodules, SHA pinning, fresh clone behavior, obfuscated paths, "}
-        {"and encrypted manifest coexistence."}
+        {" suite verifies git's behavior around gitignored nested repos. The "}
+        <Code>merge-driver</Code>
+        {" suite simulates concurrent pin bumps to validate the manifest merge logic. The "}
+        <Code>roundtrip</Code>
+        {" suite drives the full setup → add → lock → fresh-clone → unlock → init path end-to-end with git-crypt."}
       </Paragraph>
     </Section>
 
@@ -230,28 +283,73 @@ mise run test`}</CodeBlock>
       <CodeBlock>{[
         "modules/",
         "├── .mise/tasks/",
-        "│   ├── setup       # Initialize submodules dir + manifest",
-        "│   ├── add         # Clone into hashed path, record in manifest",
-        "│   ├── list        # Show modules (table or --json)",
-        "│   ├── init        # Populate all modules on fresh checkout",
-        "│   ├── update      # Pull latest, update pinned SHA",
-        "│   ├── status      # Show at-pin / changed / missing",
-        "│   ├── remove      # Clean removal of clone + manifest entry",
-        "│   └── test        # Run BATS test suite",
+        "│   ├── setup           # Initialize manifest, config, gitignore, hooks, merge driver",
+        "│   ├── add             # Clone into modules/<name>, record in manifest",
+        "│   ├── init            # Populate all modules from the manifest",
+        "│   ├── list            # Show modules (table or --json)",
+        "│   ├── status          # Show at-pin / changed / missing",
+        "│   ├── update          # Pull latest, update pinned SHA",
+        "│   ├── remove          # Clean removal of clone + manifest entry",
+        "│   ├── lock / unlock   # Wrappers around rudi lock / unlock",
+        "│   ├── install-hooks   # Register the merge driver (called by setup)",
+        "│   └── test            # Run BATS test suite",
         "├── lib/",
-        "│   └── common.sh   # Shared helpers (manifest ops, hashing, require checks)",
+        "│   ├── common.sh                  # Shared helpers, manifest ops",
+        "│   ├── hooks.sh                   # Merge-driver installer",
+        "│   └── manifest-merge-driver.sh   # git-crypt-aware 3-way merge",
+        "├── hooks/",
+        "│   ├── dispatcher",
+        "│   ├── gitmodules-guard           # Pre-commit: reject .gitmodules",
+        "│   └── manifest-encryption        # Pre-commit: block plaintext manifest",
         "├── test/",
         "│   ├── test_helper.bash",
-        "│   ├── git-mechanics.bats   # Git behavior verification",
+        "│   ├── common.bats",
         "│   ├── setup.bats",
         "│   ├── add.bats",
         "│   ├── list.bats",
         "│   ├── init.bats",
         "│   ├── update.bats",
         "│   ├── status.bats",
-        "│   └── remove.bats",
+        "│   ├── remove.bats",
+        "│   ├── hooks.bats",
+        "│   ├── git-mechanics.bats         # Behavior around gitignored nested repos",
+        "│   ├── merge-driver.bats          # Concurrent-edit regression tests",
+        "│   └── roundtrip.bats             # Full setup → lock → clone → unlock → init",
         "└── mise.toml",
       ].join("\n")}</CodeBlock>
+    </Section>
+
+    <Section title="Migration from pre-v0.9.0">
+      <Paragraph>
+        {"v0.9.0 is a breaking change: old-layout repos (hashed paths under "}
+        <Code>submodules/</Code>
+        {", JSON manifest, gitlinks) need a one-shot migration to the new opacity layout. See the migration script and instructions at "}
+        <Link href="https://github.com/KnickKnackLabs/modules/issues/16">modules#16</Link>
+        {"."}
+      </Paragraph>
+      <Paragraph><Bold>Breaking changes:</Bold></Paragraph>
+      <List>
+        <Item>
+          {"Clone-root is "}<Code>modules/</Code>{" (was "}<Code>submodules/</Code>
+          {" with hashed paths). Configurable via "}<Code>modules setup --path &lt;dir&gt;</Code>{"."}
+        </Item>
+        <Item>
+          {"Manifest is tab-separated (was JSON). No user-facing format; matters only for anyone scripting against "}
+          <Code>.modules/manifest</Code>{" directly."}
+        </Item>
+        <Item>
+          <Code>modules list --json</Code>
+          {" schema: each module is now "}<Code>{"{url, pin}"}</Code>
+          {". The pre-v0.9.0 schema included "}<Code>path</Code>
+          {"; module paths are now derived from "}<Code>.modules/config</Code>{"'s "}<Code>path</Code>
+          {" field, not stored per-module."}
+        </Item>
+        <Item>
+          <Code>.modules/config</Code>
+          {" carries a "}<Code>version</Code>
+          {" field. Mismatched clients refuse to operate rather than silently misbehaving."}
+        </Item>
+      </List>
     </Section>
 
     <LineBreak />

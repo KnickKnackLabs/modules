@@ -40,6 +40,25 @@ setup() {
   echo "$output" | jq -e '.["my-repo"].url' >/dev/null
 }
 
+@test "list --json escapes quotes/backslashes in URLs safely" {
+  # Write a manifest line by hand with a URL containing a double-quote and
+  # a backslash — exactly the shape that broke the old awk-based encoder.
+  modules add "$REMOTE" --name evil
+  local manifest="$PARENT/.modules/manifest"
+  # Decrypt-in-place isn't needed here: git-crypt is active only if initialized;
+  # for these tests the manifest is plaintext TSV.
+  printf 'evil\thttps://example.com/a"b\\c\tdeadbeef\n' > "$manifest"
+
+  run modules list --json
+  [ "$status" -eq 0 ]
+  # Output must be valid JSON (would fail with the old awk encoder).
+  echo "$output" | jq -e '.' >/dev/null
+  # The URL should round-trip exactly, including the quote and backslash.
+  local got
+  got=$(echo "$output" | jq -r '.evil.url')
+  [ "$got" = 'https://example.com/a"b\c' ]
+}
+
 @test "list shows multiple modules" {
   local remote2="$BATS_TEST_TMPDIR/remote2"
   create_remote_repo "$remote2"

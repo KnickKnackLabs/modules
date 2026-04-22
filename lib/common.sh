@@ -6,11 +6,40 @@ set -euo pipefail
 # The target repo is always CALLER_PWD (set by shiv shim)
 TARGET_DIR="${CALLER_PWD:-.}"
 
-# Where modules live in the target repo
-SUBMODULES_DIR="$TARGET_DIR/submodules"
+# Where modules metadata lives (tracked; manifest encrypted, config plaintext).
+MODULES_DIR="$TARGET_DIR/.modules"
+MANIFEST="$MODULES_DIR/manifest"
+CONFIG="$MODULES_DIR/config"
 
-# The manifest file (encrypted via git-crypt)
-MANIFEST="$SUBMODULES_DIR/.manifest"
+# Current layout version. Written into .modules/config at setup; read by
+# require_initialized to detect incompatible repos (old layout, future
+# layout) and produce actionable errors rather than silent misbehavior.
+MODULES_LAYOUT_VERSION="0.9.0"
+
+# Paths tracked in git-relative form (for hooks / diff matching).
+MANIFEST_REL=".modules/manifest"
+CONFIG_REL=".modules/config"
+
+# Default clone-root path (relative to repo root) if no config is set.
+DEFAULT_CLONES_PATH="modules"
+
+# Resolve the relative path (from repo root) where module clones live.
+clones_path_rel() {
+  if [ -f "$CONFIG" ] && command -v jq &>/dev/null; then
+    local configured
+    configured="$(jq -r '.path // empty' "$CONFIG" 2>/dev/null || true)"
+    if [ -n "$configured" ]; then
+      echo "$configured"
+      return
+    fi
+  fi
+  echo "$DEFAULT_CLONES_PATH"
+}
+
+# Absolute path to the clone root.
+clones_dir() {
+  echo "$TARGET_DIR/$(clones_path_rel)"
+}
 
 # ── Require checks ────────────────────────────────────────────
 
@@ -22,9 +51,32 @@ require_git() {
 }
 
 require_initialized() {
+  # Detect pre-v0.9.0 layout (tracked 'submodules/.manifest', JSON format).
+  # Give the user an actionable migration pointer instead of a generic
+  # 'not initialized' error that would invite them to run `modules setup`
+  # and create a parallel .modules/ directory alongside the old layout.
+  if [ ! -f "$MANIFEST" ] && [ -f "$TARGET_DIR/submodules/.manifest" ]; then
+    echo "Error: this repo uses the pre-v0.9.0 modules layout ('submodules/.manifest')." >&2
+    echo "Migration guide: https://github.com/KnickKnackLabs/modules/issues/16" >&2
+    echo "(or see den/notes/modules-opacity-migration.md)" >&2
+    exit 1
+  fi
+
   if [ ! -f "$MANIFEST" ]; then
     echo "Error: modules not initialized. Run: modules setup" >&2
     exit 1
+  fi
+
+  # Version check: if config declares a layout version we don't recognize,
+  # refuse rather than risk silent misbehavior.
+  if [ -f "$CONFIG" ] && command -v jq &>/dev/null; then
+    local declared
+    declared="$(jq -r '.version // empty' "$CONFIG" 2>/dev/null || true)"
+    if [ -n "$declared" ] && [ "$declared" != "$MODULES_LAYOUT_VERSION" ]; then
+      echo "Error: this repo declares modules layout version '$declared', but this client supports '$MODULES_LAYOUT_VERSION'." >&2
+      echo "Upgrade or downgrade the modules client to match." >&2
+      exit 1
+    fi
   fi
 }
 
@@ -42,63 +94,119 @@ require_rudi() {
   fi
 }
 
-# ── Hashing ───────────────────────────────────────────────────
+# ── Path helpers ──────────────────────────────────────────────
 
-# Generate an obfuscated directory name from a module name.
-# Uses first 12 chars of SHA-1 hash.
-hash_name() {
-  if command -v shasum &>/dev/null; then
-    printf '%s' "$1" | shasum | cut -c1-12
-  elif command -v sha1sum &>/dev/null; then
-    printf '%s' "$1" | sha1sum | cut -c1-12
-  else
-    printf '%s' "$1" | openssl dgst -sha1 | awk '{print $NF}' | cut -c1-12
-  fi
+# Given a module name, return its clone path (absolute).
+module_path() {
+  local name="$1"
+  echo "$(clones_dir)/$name"
 }
 
 # ── Manifest operations ──────────────────────────────────────
+#
+# Manifest format: tab-separated lines, sorted by name.
+#   <name>\t<url>\t<pin>\n
+#
+# Line-oriented form lets us use a trivial union merge driver (adapted
+# from KnickKnackLabs/notes) for concurrent edits. See
+# lib/manifest-merge-driver.sh.
 
-# Read the full manifest. Outputs JSON to stdout.
+# Print the full manifest to stdout.
 manifest_read() {
-  if [ ! -f "$MANIFEST" ]; then
-    echo "{}"
-    return
+  if [ -f "$MANIFEST" ]; then
+    cat "$MANIFEST"
   fi
-  cat "$MANIFEST"
 }
 
-# Write JSON from stdin to the manifest.
-# Uses a temp file to avoid truncating before pipeline reads finish.
+# Write manifest from stdin. Normalizes: deduplicates by name (first wins),
+# sorts alphabetically by name.
 manifest_write() {
   local tmp="${MANIFEST}.tmp"
-  jq '.' > "$tmp"
+  # awk: keep first occurrence of each name; then sort by name.
+  awk -F'\t' '!seen[$1]++' | sort -t$'\t' -k1,1 > "$tmp"
   mv "$tmp" "$MANIFEST"
 }
 
-# Get a module entry by name. Outputs JSON to stdout.
-# Returns 1 if not found.
+# True (0) if a module with this name exists.
+manifest_has() {
+  local name="$1"
+  [ -f "$MANIFEST" ] || return 1
+  awk -F'\t' -v n="$name" '$1 == n { found=1; exit } END { exit !found }' "$MANIFEST"
+}
+
+# Print a single manifest line for a name (empty if not found).
 manifest_get() {
   local name="$1"
-  local entry
-  entry="$(manifest_read | jq -e --arg n "$name" '.[$n]')" || return 1
-  echo "$entry"
+  [ -f "$MANIFEST" ] || return 1
+  local line
+  line="$(awk -F'\t' -v n="$name" '$1 == n { print; exit }' "$MANIFEST")"
+  if [ -z "$line" ]; then
+    return 1
+  fi
+  echo "$line"
 }
 
-# Set a module entry. Reads current manifest, merges, writes back.
-# Usage: manifest_set <name> <url> <path> <pin>
+# Print the URL for a name.
+manifest_url() {
+  local name="$1"
+  manifest_get "$name" | cut -f2
+}
+
+# Print the pin for a name.
+manifest_pin() {
+  local name="$1"
+  manifest_get "$name" | cut -f3
+}
+
+# Insert or update an entry.
+# Usage: manifest_set <name> <url> <pin>
 manifest_set() {
-  local name="$1" url="$2" path="$3" pin="$4"
-  manifest_read | jq --arg n "$name" --arg u "$url" --arg p "$path" --arg s "$pin" \
-    '.[$n] = {"url": $u, "path": $p, "pin": $s}' | manifest_write
+  local name="$1" url="$2" pin="$3"
+
+  # Validate: no tabs (our delimiter) or newlines (our record separator)
+  # in any field. Either would split one entry across lines/columns and
+  # corrupt the manifest's keyed-on-name logic.
+  if [[ "$name" == *$'\t'* || "$url" == *$'\t'* || "$pin" == *$'\t'* ]]; then
+    echo "Error: manifest fields must not contain tab characters" >&2
+    return 1
+  fi
+  if [[ "$name" == *$'\n'* || "$url" == *$'\n'* || "$pin" == *$'\n'* ]]; then
+    echo "Error: manifest fields must not contain newline characters" >&2
+    return 1
+  fi
+
+  local tmp="${MANIFEST}.tmp"
+  {
+    # Copy all other entries
+    if [ -f "$MANIFEST" ]; then
+      awk -F'\t' -v n="$name" '$1 != n' "$MANIFEST"
+    fi
+    # Append new entry
+    printf '%s\t%s\t%s\n' "$name" "$url" "$pin"
+  } | sort -t$'\t' -k1,1 > "$tmp"
+  mv "$tmp" "$MANIFEST"
 }
 
-# Remove a module entry by name.
+# Remove an entry by name. Silent if not present.
 manifest_remove() {
   local name="$1"
-  manifest_read | jq --arg n "$name" 'del(.[$n])' | manifest_write
+  [ -f "$MANIFEST" ] || return 0
+  local tmp="${MANIFEST}.tmp"
+  awk -F'\t' -v n="$name" '$1 != n' "$MANIFEST" > "$tmp" || true
+  mv "$tmp" "$MANIFEST"
 }
 
-# List all module names. One per line.
+# List all module names, one per line, sorted.
 manifest_names() {
-  manifest_read | jq -r 'keys[]'
+  [ -f "$MANIFEST" ] || return 0
+  cut -f1 "$MANIFEST" 2>/dev/null || true
+}
+
+# Count entries (non-empty lines).
+manifest_count() {
+  if [ ! -f "$MANIFEST" ]; then
+    echo 0
+    return
+  fi
+  awk 'NF' "$MANIFEST" | wc -l | tr -d ' '
 }

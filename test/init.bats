@@ -23,41 +23,37 @@ setup() {
   [[ "$output" == *"No modules"* ]]
 }
 
-@test "init clones modules from manifest into correct paths" {
+@test "init clones modules from manifest into readable paths" {
   modules add "$REMOTE" --name my-repo
   git -C "$PARENT" commit -m "add module"
 
-  local hash
-  hash="$(hash_name "my-repo")"
-
-  # Simulate fresh clone: remove the clone but keep the manifest and gitlink
-  rm -rf "$PARENT/submodules/$hash"
+  # Simulate fresh clone: remove the clone but keep the manifest
+  rm -rf "$PARENT/modules/my-repo"
 
   run modules init
   [ "$status" -eq 0 ]
   [[ "$output" == *"my-repo"* ]]
 
   # Clone should be restored
-  [ -d "$PARENT/submodules/$hash/.git" ]
-  [ -f "$PARENT/submodules/$hash/README.md" ]
+  [ -d "$PARENT/modules/my-repo/.git" ]
+  [ -f "$PARENT/modules/my-repo/README.md" ]
 }
 
 @test "init checks out the pinned SHA" {
   modules add "$REMOTE" --name my-repo
   git -C "$PARENT" commit -m "add module"
 
-  local hash pin
-  hash="$(hash_name "my-repo")"
-  pin="$(jq -r '.["my-repo"].pin' "$PARENT/submodules/.manifest")"
+  local pin
+  pin="$(manifest_pin_of "$PARENT/.modules/manifest" "my-repo")"
 
   # Remove clone
-  rm -rf "$PARENT/submodules/$hash"
+  rm -rf "$PARENT/modules/my-repo"
 
   modules init
 
   # Should be at pinned commit
   local actual
-  actual="$(repo_head "$PARENT/submodules/$hash")"
+  actual="$(repo_head "$PARENT/modules/my-repo")"
   [ "$actual" = "$pin" ]
 }
 
@@ -70,14 +66,9 @@ setup() {
 }
 
 @test "init reports failure when clone fails" {
-  # Add a module with a bogus URL directly in the manifest
-  local hash
-  hash="$(hash_name "bad-repo")"
-  local manifest
-  manifest="$(cat "$PARENT/submodules/.manifest")"
-  echo "$manifest" | jq --arg h "submodules/$hash" \
-    '. + {"bad-repo": {"url": "file:///nonexistent/repo.git", "path": $h, "pin": "0000000000000000000000000000000000000000"}}' \
-    > "$PARENT/submodules/.manifest"
+  # Add a module with a bogus URL directly in the manifest (TSV format)
+  printf 'bad-repo\tfile:///nonexistent/repo.git\t0000000000000000000000000000000000000000\n' \
+    >> "$PARENT/.modules/manifest"
 
   run modules init
   [ "$status" -ne 0 ]
@@ -92,15 +83,11 @@ setup() {
   modules add "$remote2" --name second
   git -C "$PARENT" commit -m "add modules"
 
-  local hash1 hash2
-  hash1="$(hash_name "first")"
-  hash2="$(hash_name "second")"
-
   # Remove both clones
-  rm -rf "$PARENT/submodules/$hash1" "$PARENT/submodules/$hash2"
+  rm -rf "$PARENT/modules/first" "$PARENT/modules/second"
 
   run modules init
   [ "$status" -eq 0 ]
-  [ -d "$PARENT/submodules/$hash1/.git" ]
-  [ -d "$PARENT/submodules/$hash2/.git" ]
+  [ -d "$PARENT/modules/first/.git" ]
+  [ -d "$PARENT/modules/second/.git" ]
 }

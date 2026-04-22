@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#MISE description="Install git merge driver for the modules manifest"
+#MISE dir="{{config_root}}"
+set -euo pipefail
+
+source "$MISE_CONFIG_ROOT/lib/common.sh"
+source "$MISE_CONFIG_ROOT/lib/hooks.sh"
+
+require_git
+
+install_manifest_merge_driver
+
+# Stage updated .gitattributes if anything changed.
+git -C "$TARGET_DIR" add "$TARGET_DIR/.gitattributes" 2>/dev/null || true
+
+echo "Installed merge driver for .modules/manifest"
+echo "  git config:    merge.modules-manifest.driver"
+echo "  .gitattributes: .modules/manifest merge=modules-manifest"

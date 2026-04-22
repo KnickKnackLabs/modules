@@ -16,21 +16,7 @@ setup() {
   export CALLER_PWD="$PARENT"
 }
 
-# Helper: init rudi in the parent repo, then run modules setup
-setup_with_encryption() {
-  cd "$MISE_CONFIG_ROOT" && CALLER_PWD="$PARENT" mise run -q rudi:init --user "$TEST_GPG_FINGERPRINT" --no-user 2>/dev/null || \
-    CALLER_PWD="$PARENT" rudi init --user "$TEST_GPG_FINGERPRINT" 2>/dev/null || true
-  # If rudi isn't available as a mise task, use git-crypt directly
-  if [ ! -d "$PARENT/.git/git-crypt" ]; then
-    cd "$PARENT" && git-crypt init
-    git-crypt add-gpg-user --trusted "$TEST_GPG_FINGERPRINT"
-  fi
-  export CALLER_PWD="$PARENT"
-  modules setup
-}
-
 @test "roundtrip: setup auto-detects encryption and assigns manifest" {
-  # Init encryption first via rudi/git-crypt
   cd "$PARENT" && git-crypt init
   git-crypt add-gpg-user --trusted "$TEST_GPG_FINGERPRINT"
 
@@ -38,8 +24,8 @@ setup_with_encryption() {
   run modules setup
   [ "$status" -eq 0 ]
 
-  # .manifest should be assigned for encryption
-  run git -C "$PARENT" check-attr filter submodules/.manifest
+  # .modules/manifest should be assigned for encryption
+  run git -C "$PARENT" check-attr filter .modules/manifest
   [[ "$output" == *"git-crypt"* ]]
 }
 
@@ -56,9 +42,10 @@ setup_with_encryption() {
 
   cd "$PARENT" && git-crypt lock
 
-  run file "$PARENT/submodules/.manifest"
-  [[ "$output" != *"JSON"* ]]
+  run file "$PARENT/.modules/manifest"
+  # After lock, manifest should not identify as plain text
   [[ "$output" != *"ASCII"* ]]
+  [[ "$output" != *"UTF-8"* ]]
 }
 
 @test "roundtrip: fresh clone → unlock → init restores modules" {
@@ -72,22 +59,47 @@ setup_with_encryption() {
   modules add "$REMOTE" --name my-repo
   git -C "$PARENT" commit -m "add module"
 
-  local hash pin
-  hash="$(hash_name "my-repo")"
-  pin="$(jq -r '.["my-repo"].pin' "$PARENT/submodules/.manifest")"
+  local pin
+  pin="$(manifest_pin_of "$PARENT/.modules/manifest" "my-repo")"
 
   local clone="$BATS_TEST_TMPDIR/clone"
   git clone "$PARENT" "$clone"
 
-  [ ! -d "$clone/submodules/$hash/.git" ]
+  # Fresh clone has no modules/ dir — it's gitignored and not tracked
+  [ ! -d "$clone/modules" ] || [ -z "$(ls -A "$clone/modules" 2>/dev/null)" ]
 
   cd "$clone" && git-crypt unlock
 
   export CALLER_PWD="$clone"
   modules init
 
-  [ -d "$clone/submodules/$hash/.git" ]
+  [ -d "$clone/modules/my-repo/.git" ]
   local actual
-  actual="$(repo_head "$clone/submodules/$hash")"
+  actual="$(repo_head "$clone/modules/my-repo")"
   [ "$actual" = "$pin" ]
+}
+
+@test "roundtrip: locked clone reveals nothing about submodules" {
+  cd "$PARENT" && git-crypt init
+  git-crypt add-gpg-user --trusted "$TEST_GPG_FINGERPRINT"
+
+  export CALLER_PWD="$PARENT"
+  modules setup
+  git -C "$PARENT" commit -m "init modules"
+
+  modules add "$REMOTE" --name my-secret-dep
+  git -C "$PARENT" commit -m "add module"
+
+  # Lock the parent
+  cd "$PARENT" && git-crypt lock
+
+  # A locked observer sees nothing about what's in submodules
+  run git -C "$PARENT" ls-tree -r HEAD
+  [[ "$output" != *"160000"* ]]       # no gitlinks
+  [[ "$output" != *"my-secret-dep"* ]] # name not in tree
+
+  # The manifest is present but ciphertext
+  run file "$PARENT/.modules/manifest"
+  [[ "$output" != *"ASCII"* ]]
+  [[ "$output" != *"UTF-8"* ]]
 }

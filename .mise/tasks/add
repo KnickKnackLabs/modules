@@ -9,48 +9,47 @@ set -euo pipefail
 source "$MISE_CONFIG_ROOT/lib/common.sh"
 
 require_git
-require_jq
 require_initialized
 
 url="$usage_url"
 
-# Derive name from URL if not provided: https://github.com/org/repo.git → repo
 if [ -n "${usage_name:-}" ]; then
   name="$usage_name"
 else
   name="$(basename "$url" .git)"
+  name="${name%/}"
 fi
 
-# Check for duplicate
-if manifest_get "$name" &>/dev/null; then
+if [ -z "$name" ] || [[ "$name" == *"/"* ]] || [[ "$name" == "."* ]]; then
+  echo "Error: invalid module name: '$name'" >&2
+  echo "Use --name to provide an explicit name." >&2
+  exit 1
+fi
+
+if manifest_has "$name"; then
   echo "Error: module '$name' already exists" >&2
   exit 1
 fi
 
-# Generate obfuscated path
-hash="$(hash_name "$name")"
-mod_path="$SUBMODULES_DIR/$hash"
+mod_path="$(module_path "$name")"
+clones_rel="$(clones_path_rel)"
 
 if [ -d "$mod_path" ]; then
-  echo "Error: directory already exists: submodules/$hash" >&2
+  echo "Error: directory already exists: $clones_rel/$name" >&2
   exit 1
 fi
 
-# Clone
-gum spin --title "Cloning $url → submodules/$hash" -- git clone "$url" "$mod_path"
+mkdir -p "$(clones_dir)"
+gum spin --title "Cloning $url → $clones_rel/$name" -- git clone "$url" "$mod_path"
 
-# Check out specific ref if requested
 if [ -n "${usage_ref:-}" ]; then
   git -C "$mod_path" checkout "$usage_ref"
 fi
 
-# Record the pinned SHA
 pin="$(git -C "$mod_path" rev-parse HEAD)"
 
-# Update manifest
-manifest_set "$name" "$url" "submodules/$hash" "$pin"
+manifest_set "$name" "$url" "$pin"
 
-# Stage the gitlink and updated manifest
-git -C "$TARGET_DIR" add "$mod_path" "$MANIFEST"
+git -C "$TARGET_DIR" add "$MANIFEST"
 
-gum style --foreground 2 "Added module '$name' (submodules/$hash @ ${pin:0:12})"
+gum style --foreground 2 "Added module '$name' ($clones_rel/$name @ ${pin:0:12})"

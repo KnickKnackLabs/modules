@@ -22,7 +22,7 @@ setup() {
   git -C "$PARENT" commit -m "add module"
 
   local old_pin
-  old_pin="$(jq -r '.["my-repo"].pin' "$PARENT/submodules/.manifest")"
+  old_pin="$(manifest_pin_of "$PARENT/.modules/manifest" "my-repo")"
 
   # Push a new commit to the remote
   echo "upstream change" > "$REMOTE/upstream.md"
@@ -34,7 +34,7 @@ setup() {
   [[ "$output" == *"updated"* ]]
 
   local new_pin
-  new_pin="$(jq -r '.["my-repo"].pin' "$PARENT/submodules/.manifest")"
+  new_pin="$(manifest_pin_of "$PARENT/.modules/manifest" "my-repo")"
   [ "$old_pin" != "$new_pin" ]
 }
 
@@ -73,11 +73,8 @@ setup() {
   modules add "$REMOTE" --name my-repo
   git -C "$PARENT" commit -m "add module"
 
-  local hash
-  hash="$(hash_name "my-repo")"
-
   # Simulate fresh clone: remove the clone, re-init (which detaches HEAD)
-  rm -rf "$PARENT/submodules/$hash"
+  rm -rf "$PARENT/modules/my-repo"
   modules init
 
   # Push a new commit to the remote
@@ -100,10 +97,8 @@ setup() {
   git -C "$PARENT" commit -m "add modules"
 
   # Break the first module's clone so pull fails
-  local hash
-  hash="$(hash_name "first")"
-  rm -rf "$PARENT/submodules/$hash/.git"
-  mkdir -p "$PARENT/submodules/$hash/.git"  # broken .git dir
+  rm -rf "$PARENT/modules/first/.git"
+  mkdir -p "$PARENT/modules/first/.git"  # broken .git dir
 
   run modules update
   [ "$status" -ne 0 ]
