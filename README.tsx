@@ -136,17 +136,29 @@ const readme = (
     </Section>
 
     <Section title="Quick start">
+      <Paragraph>
+        <Bold>Prerequisites:</Bold>
+        {" "}<Code>shiv</Code>, <Code>jq</Code>, <Code>git</Code>, <Code>git-crypt</Code>,
+        {" a GPG key, and "}
+        <Link href="https://github.com/KnickKnackLabs/rudi">rudi</Link>
+        {" initialized in your repo ("}<Code>rudi init && rudi assign &lt;key&gt;</Code>{")."}
+        {" Encryption is needed so the manifest can be committed opaquely — running "}
+        <Code>modules setup</Code>
+        {" without it will warn and commit the manifest in plaintext."}
+      </Paragraph>
       <CodeBlock lang="bash">{`# Install
 shiv install modules
 
 # Initialize in your repo (defaults to modules/ as the clone root)
 modules setup
+git commit -m "init modules"
 
 # Or pick a different clone root
 modules setup --path deps
 
 # Add a dependency
 modules add https://github.com/org/repo.git --name my-dep
+git commit -m "add my-dep"
 
 # See what you have
 modules list
@@ -319,6 +331,29 @@ mise run test`}</CodeBlock>
         <Link href="https://github.com/KnickKnackLabs/modules/issues/16">modules#16</Link>
         {"."}
       </Paragraph>
+      <Paragraph><Bold>Breaking changes:</Bold></Paragraph>
+      <List>
+        <Item>
+          {"Clone-root is "}<Code>modules/</Code>{" (was "}<Code>submodules/</Code>
+          {" with hashed paths). Configurable via "}<Code>modules setup --path &lt;dir&gt;</Code>{"."}
+        </Item>
+        <Item>
+          {"Manifest is tab-separated (was JSON). No user-facing format; matters only for anyone scripting against "}
+          <Code>.modules/manifest</Code>{" directly."}
+        </Item>
+        <Item>
+          <Code>modules list --json</Code>
+          {" schema: each module is now "}<Code>{"{url, pin}"}</Code>
+          {". The pre-v0.9.0 schema included "}<Code>path</Code>
+          {"; module paths are now derived from "}<Code>.modules/config</Code>{"'s "}<Code>path</Code>
+          {" field, not stored per-module."}
+        </Item>
+        <Item>
+          <Code>.modules/config</Code>
+          {" carries a "}<Code>version</Code>
+          {" field. Mismatched clients refuse to operate rather than silently misbehaving."}
+        </Item>
+      </List>
     </Section>
 
     <LineBreak />

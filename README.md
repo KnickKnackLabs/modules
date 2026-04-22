@@ -25,18 +25,22 @@ Naive `git clone` inside a parent repo does better — it creates a mode 160000 
 
 ## Quick start
 
+**Prerequisites:** `shiv`, `jq`, `git`, `git-crypt`, a GPG key, and [rudi](https://github.com/KnickKnackLabs/rudi) initialized in your repo (`rudi init && rudi assign <key>`). Encryption is needed so the manifest can be committed opaquely — running `modules setup` without it will warn and commit the manifest in plaintext.
+
 ```bash
 # Install
 shiv install modules
 
 # Initialize in your repo (defaults to modules/ as the clone root)
 modules setup
+git commit -m "init modules"
 
 # Or pick a different clone root
 modules setup --path deps
 
 # Add a dependency
 modules add https://github.com/org/repo.git --name my-dep
+git commit -m "add my-dep"
 
 # See what you have
 modules list
@@ -84,18 +88,19 @@ What a public observer sees on GitHub (locked):
 
 ## Commands
 
-| Command                              | Description                                       |
-| ------------------------------------ | ------------------------------------------------- |
-| `modules add <url> [--name] [--ref]` | Add a submodule                                   |
-| `modules init`                       | Clone and checkout all modules from the manifest  |
-| `modules install-hooks`              | Install git merge driver for the modules manifest |
-| `modules list [--json]`              | List modules                                      |
-| `modules lock`                       | Lock encrypted manifest (re-encrypt on disk)      |
-| `modules remove <name>`              | Remove a module                                   |
-| `modules setup [--path]`             | Initialize modules in the current repo            |
-| `modules status`                     | Show status of all modules                        |
-| `modules unlock`                     | Unlock encrypted manifest using your GPG key      |
-| `modules update [name]`              | Pull latest and update pin for module(s)          |
+| Command                                             | Description                                                               |
+| --------------------------------------------------- | ------------------------------------------------------------------------- |
+| `modules add <url> [--name] [--ref]`                | Add a submodule                                                           |
+| `modules init`                                      | Clone and checkout all modules from the manifest                          |
+| `modules install-hooks`                             | Install git merge driver for the modules manifest                         |
+| `modules list [--json]`                             | List modules                                                              |
+| `modules lock`                                      | Lock encrypted manifest (re-encrypt on disk)                              |
+| `modules merge-driver <ancestor> <current> <other>` | Custom git merge driver for .modules/manifest (invoked by git, not users) |
+| `modules remove <name>`                             | Remove a module                                                           |
+| `modules setup [--path]`                            | Initialize modules in the current repo                                    |
+| `modules status`                                    | Show status of all modules                                                |
+| `modules unlock`                                    | Unlock encrypted manifest using your GPG key                              |
+| `modules update [name]`                             | Pull latest and update pin for module(s)                                  |
 
 <br />
 
@@ -107,7 +112,7 @@ cd modules && mise trust && mise install
 mise run test
 ```
 
-**85 tests** across 12 suites, using [BATS](https://github.com/bats-core/bats-core). All tests use local git repos in temp directories — no network, no external dependencies.
+**92 tests** across 12 suites, using [BATS](https://github.com/bats-core/bats-core). All tests use local git repos in temp directories — no network, no external dependencies.
 
 The `git-mechanics` suite verifies git's behavior around gitignored nested repos. The `merge-driver` suite simulates concurrent pin bumps to validate the manifest merge logic. The `roundtrip` suite drives the full setup → add → lock → fresh-clone → unlock → init path end-to-end with git-crypt.
 
@@ -154,6 +159,13 @@ modules/
 ## Migration from pre-v0.9.0
 
 v0.9.0 is a breaking change: old-layout repos (hashed paths under `submodules/`, JSON manifest, gitlinks) need a one-shot migration to the new opacity layout. See the migration script and instructions at [modules#16](https://github.com/KnickKnackLabs/modules/issues/16).
+
+**Breaking changes:**
+
+- Clone-root is `modules/` (was `submodules/` with hashed paths). Configurable via `modules setup --path <dir>`.
+- Manifest is tab-separated (was JSON). No user-facing format; matters only for anyone scripting against `.modules/manifest` directly.
+- `modules list --json` schema: each module is now `{url, pin}`. The pre-v0.9.0 schema included `path`; module paths are now derived from `.modules/config`'s `path` field, not stored per-module.
+- `.modules/config` carries a `version` field. Mismatched clients refuse to operate rather than silently misbehaving.
 
 <br />
 
