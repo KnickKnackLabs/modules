@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 #MISE description="Custom git merge driver for .modules/manifest (invoked by git, not users)"
-#MISE dir="{{config_root}}"
 #MISE hide=true
 #USAGE arg "<ancestor>" help="Common ancestor file (%O)"
 #USAGE arg "<current>" help="Current branch file (%A) — written in place"
@@ -12,6 +11,15 @@ set -euo pipefail
 # version, so upgrading modules does not leave a stale absolute path in
 # .git/config (which would silently fall back to the default merge strategy
 # and corrupt the encrypted manifest).
+#
+# Path handling: git passes %O %A %B as paths relative to the worktree
+# where the merge is happening (e.g., `.merge_file_AbCdEf`). The shiv
+# shim cd's into the modules package dir before exec'ing mise, so by
+# the time we run those relative paths point nowhere. Cd back into
+# `$CALLER_PWD` (which the shim exported as the user's original cwd)
+# so the paths resolve. The lib script is invoked via $MISE_CONFIG_ROOT
+# which is absolute and unaffected.
 
+cd "${CALLER_PWD:-$PWD}"
 exec bash "$MISE_CONFIG_ROOT/lib/manifest-merge-driver.sh" \
   "${usage_ancestor}" "${usage_current}" "${usage_other}"

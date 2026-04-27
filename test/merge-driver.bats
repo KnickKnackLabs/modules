@@ -271,3 +271,78 @@ set_pin() {
   [ "$status" -eq 0 ]
   [[ "$output" == "modules merge-driver %O %A %B" ]]
 }
+
+# ── End-to-end: production driver-resolution path ──────────────
+#
+# The setup() in this file rewrites the driver config to a direct
+# `bash $MISE_CONFIG_ROOT/lib/manifest-merge-driver.sh ...` invocation
+# so the merge-logic tests don't depend on a `modules` shim being on
+# PATH. That isolates the merge logic but leaves the production
+# resolution path (`modules merge-driver %O %A %B` → PATH lookup →
+# shiv shim → mise task → bash driver) unverified end-to-end.
+#
+# This test exercises the full path. It builds a temporary `modules`
+# shim that hands off to the in-tree `mise run merge-driver`, prepends
+# its directory to PATH, restores the production driver-config form,
+# and runs a real concurrent-add merge. If `merge-driver` ever stops
+# being a valid task, its USAGE contract drifts, or the install-hooks
+# string drifts from `modules merge-driver %O %A %B`, this test fails.
+
+@test "merge: production PATH-resolution path works end-to-end (modules merge-driver shim)" {
+  # Build a `modules` shim that defers to the in-tree mise task. This
+  # is the mechanic the shiv-installed shim uses in production.
+  local shim_dir="$BATS_TEST_TMPDIR/path-shim"
+  mkdir -p "$shim_dir"
+  local shim_log="$BATS_TEST_TMPDIR/shim.log"
+  # Mirror the production shiv shim's behavior: export CALLER_PWD
+  # (the user's original cwd, which git invoked the driver from) so the
+  # merge-driver task can cd back to it before resolving the relative
+  # %O %A %B paths.
+  cat > "$shim_dir/modules" <<SHIM
+#!/usr/bin/env bash
+set -euo pipefail
+echo "[shim] called: \$*" >> "$shim_log"
+export CALLER_PWD="\$PWD"
+cd "$MISE_CONFIG_ROOT"
+exec mise run -q "\$@"
+SHIM
+  chmod +x "$shim_dir/modules"
+
+  # Restore the production driver-config form (overriding the bypass
+  # that setup() installed for the rest of this file's tests).
+  git -C "$PARENT" config merge.modules-manifest.driver \
+    "modules merge-driver %O %A %B"
+
+  # Concurrent-add scenario: two branches independently add a module.
+  # The merge result should union both, with no conflict markers.
+  git -C "$PARENT" checkout -q -b branch-a
+  modules add "$REMOTE_A" --name alpha
+  git -C "$PARENT" commit -q -m "add alpha"
+
+  git -C "$PARENT" checkout -q main
+  git -C "$PARENT" checkout -q -b branch-b
+  modules add "$REMOTE_B" --name beta
+  git -C "$PARENT" commit -q -m "add beta"
+
+  # The bats test_helper exports a `modules` bash function that
+  # shadows PATH lookup whenever git's `sh -c` is bash-compatible.
+  # Unset the function so PATH wins and the shim gets called — this
+  # is the whole point of the test.
+  unset -f modules
+
+  # Merge with the shim on PATH so the `modules` config string resolves.
+  PATH="$shim_dir:$PATH" git -C "$PARENT" merge --no-edit branch-a
+
+  # Sanity: the shim must have been invoked. If it wasn't, git silently
+  # fell back to the default merge driver — the exact failure mode this
+  # test exists to catch.
+  [ -s "$shim_log" ]
+  grep -q '\[shim\] called: merge-driver' "$shim_log"
+
+  manifest_has_name "$PARENT/.modules/manifest" "alpha"
+  manifest_has_name "$PARENT/.modules/manifest" "beta"
+  run manifest_count_of "$PARENT/.modules/manifest"
+  [ "$output" = "2" ]
+  run grep -c "<<<<<<<" "$PARENT/.modules/manifest"
+  [ "$output" = "0" ]
+}
