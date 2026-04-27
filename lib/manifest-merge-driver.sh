@@ -71,132 +71,151 @@ normalize "$ANCESTOR" > "$WORK/anc"
 normalize "$OURS"     > "$WORK/ours"
 normalize "$THEIRS"   > "$WORK/theirs"
 
-# Look up the entry line for a name in a file. Prints "<url>\t<pin>" (cols 2-3)
-# or nothing. Uses read-loop instead of grep for filename-safety.
-value_for_name() {
-  local file="$1" name="$2"
-  [ ! -f "$file" ] && return 0
-  local line n rest
-  while IFS= read -r line; do
-    n="${line%%$'\t'*}"
-    if [ "$n" = "$name" ]; then
-      # Everything after the first tab
-      rest="${line#*$'\t'}"
-      printf '%s' "$rest"
-      return
-    fi
-  done < "$file"
-}
-
-name_exists_in() {
-  local file="$1" name="$2"
-  [ ! -f "$file" ] && return 1
-  local line n
-  while IFS= read -r line; do
-    n="${line%%$'\t'*}"
-    if [ "$n" = "$name" ]; then
-      return 0
-    fi
-  done < "$file"
-  return 1
-}
-
-# Collect all unique names from all three files.
-# Use awk with NF>=3 rather than cut -f1: cut returns the whole line for
-# rows with no tabs (e.g., a corrupt or partial entry), which then never
-# matches in value_for_name and produces phantom "deleted" entries.
+# Compute the sorted-unique union of names across all three sides. Use
+# `NF >= 3` to filter corrupt/partial rows; cut -f1 would emit the
+# whole line for rows lacking tabs and produce phantom names downstream.
 {
   awk -F'\t' 'NF >= 3 {print $1}' "$WORK/anc"    2>/dev/null
   awk -F'\t' 'NF >= 3 {print $1}' "$WORK/ours"   2>/dev/null
   awk -F'\t' 'NF >= 3 {print $1}' "$WORK/theirs" 2>/dev/null
 } | sort -u > "$WORK/all_names"
 
-has_conflict=false
 : > "$WORK/merged"
 : > "$WORK/conflicts"
 
-while IFS= read -r name; do
-  [ -z "$name" ] && continue
+# Single-pass merge: load all three sides into awk arrays keyed by name,
+# then iterate the pre-sorted union once. Replaces the previous bash
+# read-loop that walked each side per name (O(N²) per merge).
+#
+# Awk exit status: 0 = clean merge, 1 = conflict, anything else = awk
+# failure (programmer error or environmental). The bash wrapper reads
+# this and either appends conflict markers or exits with the failure.
+set +e
+awk -F'\t' \
+    -v MERGED="$WORK/merged" \
+    -v CONFLICTS="$WORK/conflicts" \
+    -v ALLNAMES="$WORK/all_names" \
+    -v ANCFILE="$WORK/anc" \
+    -v OURSFILE="$WORK/ours" \
+    -v THEIRSFILE="$WORK/theirs" '
+  BEGIN { OFS = "\t"; conflict = 0 }
 
-  a_val=""; o_val=""; t_val=""
-  if name_exists_in "$WORK/anc"    "$name"; then a_val="$(value_for_name "$WORK/anc"    "$name")"; a_set=1; else a_set=0; fi
-  if name_exists_in "$WORK/ours"   "$name"; then o_val="$(value_for_name "$WORK/ours"   "$name")"; o_set=1; else o_set=0; fi
-  if name_exists_in "$WORK/theirs" "$name"; then t_val="$(value_for_name "$WORK/theirs" "$name")"; t_set=1; else t_set=0; fi
+  # Filter corrupt/partial rows the same way the union collection above
+  # does so a row without a value cannot leak a name into the merge.
+  NF < 3 { next }
 
-  if [ "$o_set" = 1 ] && [ "$t_set" = 1 ]; then
-    # Present in both. Decide which value to take.
-    if [ "$o_val" = "$t_val" ]; then
-      printf '%s\t%s\n' "$name" "$o_val" >> "$WORK/merged"
-    elif [ "$a_set" = 0 ]; then
-      # Both added independently with different values — true conflict.
-      has_conflict=true
-      {
-        echo "<<<<<<< ours"
-        printf '%s\t%s\n' "$name" "$o_val"
-        echo "======="
-        printf '%s\t%s\n' "$name" "$t_val"
-        echo ">>>>>>> theirs"
-      } >> "$WORK/conflicts"
-    elif [ "$o_val" = "$a_val" ]; then
-      # Ours unchanged, theirs updated — take theirs.
-      printf '%s\t%s\n' "$name" "$t_val" >> "$WORK/merged"
-    elif [ "$t_val" = "$a_val" ]; then
-      # Theirs unchanged, ours updated — take ours.
-      printf '%s\t%s\n' "$name" "$o_val" >> "$WORK/merged"
-    else
-      # Both changed from ancestor in different ways — conflict.
-      has_conflict=true
-      {
-        echo "<<<<<<< ours"
-        printf '%s\t%s\n' "$name" "$o_val"
-        echo "======="
-        printf '%s\t%s\n' "$name" "$t_val"
-        echo ">>>>>>> theirs"
-      } >> "$WORK/conflicts"
-    fi
-  elif [ "$o_set" = 1 ] && [ "$t_set" = 0 ]; then
-    if [ "$a_set" = 1 ]; then
-      # Theirs deleted it. If ours also still matches ancestor → accept deletion.
-      # If ours diverged from ancestor → conflict (modify vs delete).
-      if [ "$o_val" = "$a_val" ]; then
-        : # accept deletion
-      else
-        has_conflict=true
-        {
-          echo "<<<<<<< ours (modified)"
-          printf '%s\t%s\n' "$name" "$o_val"
-          echo "======="
-          echo "(deleted in theirs)"
-          echo ">>>>>>> theirs"
-        } >> "$WORK/conflicts"
-      fi
-    else
-      # Only in ours, new — keep it.
-      printf '%s\t%s\n' "$name" "$o_val" >> "$WORK/merged"
-    fi
-  elif [ "$o_set" = 0 ] && [ "$t_set" = 1 ]; then
-    if [ "$a_set" = 1 ]; then
-      if [ "$t_val" = "$a_val" ]; then
-        : # accept deletion by ours
-      else
-        has_conflict=true
-        {
-          echo "<<<<<<< ours"
-          echo "(deleted in ours)"
-          echo "======="
-          printf '%s\t%s\n' "$name" "$t_val"
-          echo ">>>>>>> theirs (modified)"
-        } >> "$WORK/conflicts"
-      fi
-    else
-      # Only in theirs, new — keep it.
-      printf '%s\t%s\n' "$name" "$t_val" >> "$WORK/merged"
-    fi
-  fi
-  # If neither set: nothing to do (shouldn't happen since name came from union).
-done < "$WORK/all_names"
+  # Route each input row to the right side via FILENAME comparison.
+  # An FNR==1 counter would skip empty files (the ancestor is empty on
+  # a first-commit merge), shifting the index and routing rows wrong.
+  # Store everything-after-the-first-tab as the value (cols 2-3 joined);
+  # `index($0, "\t")` positions on the actual delimiter byte so
+  # multi-byte names stay correct (defense in depth; manifest names are
+  # ASCII today).
+  FILENAME == ANCFILE    { anc[$1]    = substr($0, index($0, "\t") + 1); has_anc[$1]    = 1 }
+  FILENAME == OURSFILE   { ours[$1]   = substr($0, index($0, "\t") + 1); has_ours[$1]   = 1 }
+  FILENAME == THEIRSFILE { theirs[$1] = substr($0, index($0, "\t") + 1); has_theirs[$1] = 1 }
 
-# Write sorted merged result to OURS
+  END {
+    # Iterate the union in sorted order. POSIX awk lacks asort();
+    # read the pre-sorted unique-names file via getline instead.
+    while ((getline name < ALLNAMES) > 0) {
+      if (name == "") continue
+      a_set = (name in has_anc)
+      o_set = (name in has_ours)
+      t_set = (name in has_theirs)
+      a = anc[name]; o = ours[name]; t = theirs[name]
+
+      if (o_set && t_set) {
+        if (o == t) {
+          # Same on both sides — take it.
+          print name OFS o > MERGED
+        } else if (!a_set) {
+          # Both sides added the name with different values — conflict.
+          emit_conflict(name, o, t, "ours", "theirs")
+          conflict = 1
+        } else if (o == a) {
+          # Ours unchanged from ancestor, theirs updated — take theirs.
+          print name OFS t > MERGED
+        } else if (t == a) {
+          # Theirs unchanged from ancestor, ours updated — take ours.
+          print name OFS o > MERGED
+        } else {
+          # Both diverged from ancestor in different ways — conflict.
+          emit_conflict(name, o, t, "ours", "theirs")
+          conflict = 1
+        }
+      } else if (o_set && !t_set) {
+        if (a_set && o == a) {
+          # Theirs deleted it; ours unchanged — accept deletion.
+        } else if (a_set) {
+          # Theirs deleted it; ours modified it — modify-vs-delete conflict.
+          emit_md_conflict(name, o, "ours (modified)", "theirs", "deleted in theirs")
+          conflict = 1
+        } else {
+          # New in ours only — keep.
+          print name OFS o > MERGED
+        }
+      } else if (!o_set && t_set) {
+        if (a_set && t == a) {
+          # Ours deleted it; theirs unchanged — accept deletion.
+        } else if (a_set) {
+          # Ours deleted it; theirs modified — conflict.
+          emit_dm_conflict(name, t, "ours", "deleted in ours", "theirs (modified)")
+          conflict = 1
+        } else {
+          # New in theirs only — keep.
+          print name OFS t > MERGED
+        }
+      }
+      # Neither set: cannot happen; the name came from the union.
+    }
+    close(MERGED)
+    close(CONFLICTS)
+    exit conflict
+  }
+
+  # Standard 3-way conflict block (both sides have the name with values).
+  function emit_conflict(name, o_val, t_val, ours_label, theirs_label) {
+    print "<<<<<<< " ours_label   > CONFLICTS
+    print name OFS o_val          > CONFLICTS
+    print "======="               > CONFLICTS
+    print name OFS t_val          > CONFLICTS
+    print ">>>>>>> " theirs_label > CONFLICTS
+  }
+
+  # Modify-on-ours vs delete-on-theirs.
+  function emit_md_conflict(name, o_val, ours_label, theirs_label, theirs_body) {
+    print "<<<<<<< " ours_label   > CONFLICTS
+    print name OFS o_val          > CONFLICTS
+    print "======="               > CONFLICTS
+    print "(" theirs_body ")"     > CONFLICTS
+    print ">>>>>>> " theirs_label > CONFLICTS
+  }
+
+  # Delete-on-ours vs modify-on-theirs.
+  function emit_dm_conflict(name, t_val, ours_label, ours_body, theirs_label) {
+    print "<<<<<<< " ours_label   > CONFLICTS
+    print "(" ours_body ")"       > CONFLICTS
+    print "======="               > CONFLICTS
+    print name OFS t_val          > CONFLICTS
+    print ">>>>>>> " theirs_label > CONFLICTS
+  }
+' "$WORK/anc" "$WORK/ours" "$WORK/theirs"
+awk_status=$?
+set -e
+
+case "$awk_status" in
+  0) has_conflict=false ;;
+  1) has_conflict=true ;;
+  *)
+    echo "modules manifest-merge-driver: awk merge failed (status $awk_status) — aborting merge" >&2
+    exit 2
+    ;;
+esac
+
+# all_names is already sorted, and the awk pass emits in the same order,
+# so $WORK/merged is sorted by construction. Sort once more as a
+# defense-in-depth pass in case a future awk change reorders.
 sort -t$'\t' -k1,1 "$WORK/merged" > "$OURS"
 
 if [ "$has_conflict" = true ]; then
