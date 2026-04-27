@@ -27,7 +27,10 @@ DEFAULT_CLONES_PATH="modules"
 clones_path_rel() {
   if [ -f "$CONFIG" ] && command -v jq &>/dev/null; then
     local configured
-    configured="$(jq -r '.path // empty' "$CONFIG" 2>/dev/null || true)"
+    if ! configured="$(jq -r '.path // empty' "$CONFIG" 2>/dev/null)"; then
+      echo "Error: $CONFIG is not valid JSON" >&2
+      exit 1
+    fi
     if [ -n "$configured" ]; then
       echo "$configured"
       return
@@ -71,7 +74,10 @@ require_initialized() {
   # refuse rather than risk silent misbehavior.
   if [ -f "$CONFIG" ] && command -v jq &>/dev/null; then
     local declared
-    declared="$(jq -r '.version // empty' "$CONFIG" 2>/dev/null || true)"
+    if ! declared="$(jq -r '.version // empty' "$CONFIG" 2>/dev/null)"; then
+      echo "Error: $CONFIG is not valid JSON" >&2
+      exit 1
+    fi
     if [ -n "$declared" ] && [ "$declared" != "$MODULES_LAYOUT_VERSION" ]; then
       echo "Error: this repo declares modules layout version '$declared', but this client supports '$MODULES_LAYOUT_VERSION'." >&2
       echo "Upgrade or downgrade the modules client to match." >&2
@@ -192,14 +198,18 @@ manifest_remove() {
   local name="$1"
   [ -f "$MANIFEST" ] || return 0
   local tmp="${MANIFEST}.tmp"
-  awk -F'\t' -v n="$name" '$1 != n' "$MANIFEST" > "$tmp" || true
+  if ! awk -F'\t' -v n="$name" '$1 != n' "$MANIFEST" > "$tmp"; then
+    rm -f "$tmp"
+    echo "Error: failed to rewrite $MANIFEST while removing '$name'" >&2
+    return 1
+  fi
   mv "$tmp" "$MANIFEST"
 }
 
 # List all module names, one per line, sorted.
 manifest_names() {
   [ -f "$MANIFEST" ] || return 0
-  cut -f1 "$MANIFEST" 2>/dev/null || true
+  cut -f1 "$MANIFEST"
 }
 
 # Count entries (non-empty lines).

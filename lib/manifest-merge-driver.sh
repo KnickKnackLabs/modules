@@ -64,7 +64,7 @@ normalize() {
   local src="$1" plaintext
   plaintext=$(mktemp "$WORK/plain.XXXXXX")
   decrypt_if_needed "$src" "$plaintext" || return 1
-  awk 'NF' "$plaintext" | sort -t$'\t' -k1,1 || true
+  awk 'NF' "$plaintext" | sort -t$'\t' -k1,1
 }
 
 normalize "$ANCESTOR" > "$WORK/anc"

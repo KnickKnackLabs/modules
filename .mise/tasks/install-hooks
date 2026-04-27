@@ -10,8 +10,11 @@ require_git
 
 install_manifest_merge_driver
 
-# Stage updated .gitattributes if anything changed.
-git -C "$TARGET_DIR" add "$TARGET_DIR/.gitattributes" 2>/dev/null || true
+# Stage updated .gitattributes if anything changed. install_manifest_merge_driver
+# always touches the file (creating it on first run, appending the merge=
+# attribute if missing) so it's always present at this point. Surface
+# real failures rather than swallowing them.
+git -C "$TARGET_DIR" add "$TARGET_DIR/.gitattributes"
 
 echo "Installed merge driver for .modules/manifest"
 echo "  git config:    merge.modules-manifest.driver"

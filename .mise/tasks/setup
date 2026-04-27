@@ -102,8 +102,12 @@ rm -f "$HOOKS_DST/pre-commit.d/path-obfuscation"
 
 install_manifest_merge_driver
 
-# Stage the manifest, config, gitignore, and gitattributes
-git -C "$TARGET_DIR" add "$MANIFEST" "$CONFIG" "$GITIGNORE" "$TARGET_DIR/.gitattributes" 2>/dev/null || true
+# Stage the manifest, config, gitignore, and gitattributes. All four
+# files were either created above (manifest, config, gitignore) or are
+# touched by install_manifest_merge_driver (gitattributes), so they
+# always exist by this point. Surface real failures instead of
+# swallowing them via `|| true` (codebase#5).
+git -C "$TARGET_DIR" add "$MANIFEST" "$CONFIG" "$GITIGNORE" "$TARGET_DIR/.gitattributes"
 
 echo "Initialized modules in $TARGET_DIR"
 echo "  manifest:  $MANIFEST_REL"
