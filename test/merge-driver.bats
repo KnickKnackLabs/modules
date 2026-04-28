@@ -330,6 +330,14 @@ SHIM
   # is the whole point of the test.
   unset -f modules
 
+  # Pin the resolution to our shim. If test_helper.bash ever changes
+  # how it shadows `modules` (e.g., switches to its own PATH-based
+  # shim), this assertion catches the drift before the merge step
+  # silently exercises the wrong binary.
+  PATH="$shim_dir:$PATH" run command -v modules
+  [ "$status" -eq 0 ]
+  [ "$output" = "$shim_dir/modules" ]
+
   # Merge with the shim on PATH so the `modules` config string resolves.
   PATH="$shim_dir:$PATH" git -C "$PARENT" merge --no-edit branch-a
 

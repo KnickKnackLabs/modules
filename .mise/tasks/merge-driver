@@ -19,7 +19,20 @@ set -euo pipefail
 # `$CALLER_PWD` (which the shim exported as the user's original cwd)
 # so the paths resolve. The lib script is invoked via $MISE_CONFIG_ROOT
 # which is absolute and unaffected.
-
-cd "${CALLER_PWD:-$PWD}"
+#
+# Refuse rather than guess: if CALLER_PWD is missing, falling back to
+# $PWD would silently re-introduce the very bug the cd guards against
+# (in production $PWD = the modules pkg dir the shim cd'd into, which
+# is exactly the broken state). Same stance as the git-crypt smudge
+# failure path in the lib script: better to fail the merge loudly than
+# to corrupt the manifest. To invoke this task manually outside the
+# shim, set CALLER_PWD explicitly: `CALLER_PWD=$PWD mise run merge-driver ...`.
+if [ -z "${CALLER_PWD:-}" ]; then
+  echo "modules merge-driver: CALLER_PWD is not set." >&2
+  echo "  This task must be invoked via the modules shim (which exports CALLER_PWD)." >&2
+  echo "  Aborting to avoid producing a corrupt manifest from unresolved relative paths." >&2
+  exit 1
+fi
+cd "$CALLER_PWD"
 exec bash "$MISE_CONFIG_ROOT/lib/manifest-merge-driver.sh" \
   "${usage_ancestor}" "${usage_current}" "${usage_other}"

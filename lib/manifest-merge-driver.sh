@@ -111,6 +111,12 @@ awk -F'\t' \
   # `index($0, "\t")` positions on the actual delimiter byte so
   # multi-byte names stay correct (defense in depth; manifest names are
   # ASCII today).
+  #
+  # Note: for a *malformed* input with duplicate-name rows, the array
+  # assignment is last-wins (the previous bash `value_for_name` was
+  # first-wins). The manifest invariant guarantees one entry per name,
+  # so this only matters as archaeology if a corrupt manifest is fed
+  # in; in that case neither behavior is more correct than the other.
   FILENAME == ANCFILE    { anc[$1]    = substr($0, index($0, "\t") + 1); has_anc[$1]    = 1 }
   FILENAME == OURSFILE   { ours[$1]   = substr($0, index($0, "\t") + 1); has_ours[$1]   = 1 }
   FILENAME == THEIRSFILE { theirs[$1] = substr($0, index($0, "\t") + 1); has_theirs[$1] = 1 }
