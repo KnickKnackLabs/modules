@@ -13,10 +13,12 @@ if ! command -v git-crypt &>/dev/null; then
   exit 0
 fi
 
-# If git-crypt isn't initialized in this repo, warn but don't block
+# If git-crypt isn't initialized in this repo, warn but don't block. Current
+# `modules setup` initializes git-crypt; this only catches manifests created by
+# older modules clients or by hand.
 if [ ! -d ".git/git-crypt" ]; then
   echo "WARNING: git-crypt not initialized — manifest will be committed in plaintext" >&2
-  echo "Run 'modules setup --gpg-key <fingerprint>' to enable encryption." >&2
+  echo "Run 'modules setup' to initialize encryption, optionally with --gpg-key <fingerprint>." >&2
   exit 0
 fi
 

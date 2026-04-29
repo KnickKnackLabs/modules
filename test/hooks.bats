@@ -123,12 +123,19 @@ EOF
 # ── Manifest encryption guard ──────────────────────────────────
 
 @test "manifest encryption hook warns without git-crypt" {
-  # In test repos, git-crypt isn't initialized — hook should warn but pass
-  mkdir -p "$PARENT/.modules"
-  printf 'test\thttps://example.com/x.git\t0000000000000000000000000000000000000000\n' \
-    > "$PARENT/.modules/manifest"
-  git -C "$PARENT" add .modules/manifest
+  # This simulates a manifest created by hand or by an older modules client.
+  local fresh="$BATS_TEST_TMPDIR/no-git-crypt"
+  create_parent_repo "$fresh"
+  mkdir -p "$fresh/.git/hooks/pre-commit.d" "$fresh/.modules"
+  cp "$REPO_DIR/hooks/dispatcher" "$fresh/.git/hooks/pre-commit"
+  cp "$REPO_DIR/hooks/manifest-encryption" "$fresh/.git/hooks/pre-commit.d/manifest-encryption"
+  chmod +x "$fresh/.git/hooks/pre-commit" "$fresh/.git/hooks/pre-commit.d/manifest-encryption"
 
-  run git -C "$PARENT" commit -m "update manifest"
+  printf 'test\thttps://example.com/x.git\t0000000000000000000000000000000000000000\n' \
+    > "$fresh/.modules/manifest"
+  git -C "$fresh" add .modules/manifest
+
+  run git -C "$fresh" commit -m "update manifest"
   [ "$status" -eq 0 ]
+  [[ "$output" == *"Run 'modules setup' to initialize encryption"* ]]
 }
