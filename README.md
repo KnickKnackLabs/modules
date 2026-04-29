@@ -25,18 +25,18 @@ Naive `git clone` inside a parent repo does better — it creates a mode 160000 
 
 ## Quick start
 
-Run `rudi init` first if your repo isn't already encrypted — the manifest is committed opaque, and `modules setup` without rudi will warn and commit in plaintext.
+`modules setup` initializes git-crypt via rudi when needed, assigns the manifest for encryption, and installs hooks/merge driver. Pass `--gpg-key` when setting up a repo meant to be cloned elsewhere; without a collaborator key, the encrypted manifest is local-only until you add and commit a rudi user.
 
 ```bash
 # Install
 shiv install modules
 
 # Initialize in your repo (defaults to modules/ as the clone root)
-modules setup
+modules setup --gpg-key <your-fingerprint>
 git commit -m "init modules"
 
 # Or pick a different clone root
-modules setup --path deps
+modules setup --path deps --gpg-key <your-fingerprint>
 
 # Add a dependency
 modules add https://github.com/org/repo.git --name my-dep
@@ -79,7 +79,7 @@ What a public observer sees on GitHub (locked):
 ```
 
 - **No gitlinks** — nothing under the clone directory is tracked by git. No pinned commit SHAs leak.
-- **Encrypted manifest** — `.modules/manifest` holds all submodule state (name, URL, pin). Assigned to git-crypt by `modules setup` when [rudi](https://github.com/KnickKnackLabs/rudi) is initialized.
+- **Encrypted manifest** — `.modules/manifest` holds all submodule state (name, URL, pin). `modules setup` initializes [rudi](https://github.com/KnickKnackLabs/rudi) when needed and assigns the manifest to git-crypt.
 - **Readable names on disk** — no hashing. `cd modules/fold` just works.
 - **Custom clone root** — `modules setup --path deps` picks a different location (e.g., `deps/`, `third-party/vendored/`). Stored in `.modules/config`.
 - **Merge-safe manifest** — a git-crypt-aware merge driver handles concurrent pin bumps without corrupting the manifest. Installed by default.
@@ -97,7 +97,7 @@ What a public observer sees on GitHub (locked):
 | `modules lock`                                      | Lock encrypted manifest (re-encrypt on disk)                              |
 | `modules merge-driver <ancestor> <current> <other>` | Custom git merge driver for .modules/manifest (invoked by git, not users) |
 | `modules remove <name>`                             | Remove a module                                                           |
-| `modules setup [--path]`                            | Initialize modules in the current repo                                    |
+| `modules setup [--path] [--gpg-key <fingerprint>]`  | Initialize modules, encryption, hooks, and merge driver                   |
 | `modules status`                                    | Show status of all modules                                                |
 | `modules unlock`                                    | Unlock encrypted manifest using your GPG key                              |
 | `modules update [name]`                             | Pull latest and update pin for module(s)                                  |

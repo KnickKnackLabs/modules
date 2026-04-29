@@ -137,20 +137,20 @@ const readme = (
 
     <Section title="Quick start">
       <Paragraph>
-        {"Run "}<Code>rudi init</Code>
-        {" first if your repo isn't already encrypted — the manifest is committed opaque, and "}
         <Code>modules setup</Code>
-        {" without rudi will warn and commit in plaintext."}
+        {" initializes git-crypt via rudi when needed, assigns the manifest for encryption, and installs hooks/merge driver. Pass "}
+        <Code>--gpg-key</Code>
+        {" when setting up a repo meant to be cloned elsewhere; without a collaborator key, the encrypted manifest is local-only until you add and commit a rudi user."}
       </Paragraph>
       <CodeBlock lang="bash">{`# Install
 shiv install modules
 
 # Initialize in your repo (defaults to modules/ as the clone root)
-modules setup
+modules setup --gpg-key <your-fingerprint>
 git commit -m "init modules"
 
 # Or pick a different clone root
-modules setup --path deps
+modules setup --path deps --gpg-key <your-fingerprint>
 
 # Add a dependency
 modules add https://github.com/org/repo.git --name my-dep
@@ -206,11 +206,11 @@ modules unlock && modules init`}</CodeBlock>
           <Bold>Encrypted manifest</Bold>
           {" — "}
           <Code>.modules/manifest</Code>
-          {" holds all submodule state (name, URL, pin). Assigned to git-crypt by "}
+          {" holds all submodule state (name, URL, pin). "}
           <Code>modules setup</Code>
-          {" when "}
+          {" initializes "}
           <Link href="https://github.com/KnickKnackLabs/rudi">rudi</Link>
-          {" is initialized."}
+          {" when needed and assigns the manifest to git-crypt."}
         </Item>
         <Item>
           <Bold>Readable names on disk</Bold>

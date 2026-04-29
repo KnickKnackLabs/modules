@@ -62,6 +62,45 @@ setup() {
   [ "$output" = "modules" ]
 }
 
+@test "setup initializes rudi and assigns manifest encryption" {
+  skip_unless_git_crypt
+
+  modules setup
+
+  [ -d "$PARENT/.git/git-crypt" ]
+  run git -C "$PARENT" check-attr filter .modules/manifest
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"git-crypt"* ]]
+}
+
+@test "setup --gpg-key adds collaborator" {
+  skip_unless_git_crypt
+  skip_unless_gpg_key
+
+  modules setup --gpg-key "$TEST_GPG_FINGERPRINT"
+
+  [ -f "$PARENT/.git-crypt/keys/default/0/$TEST_GPG_FINGERPRINT.gpg" ]
+}
+
+@test "setup handles repeated --gpg-key values separately" {
+  skip_unless_git_crypt
+
+  run modules setup --gpg-key NOPE1 --gpg-key NOPE2
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"NOPE1"* ]]
+  [[ "$output" == *"NOPE2"* ]]
+  [[ "$output" != *"NOPE1 NOPE2"* ]]
+}
+
+@test "setup warns when initializing without collaborators" {
+  skip_unless_git_crypt
+
+  run modules setup
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"WARNING: initialized git-crypt without any GPG collaborators"* ]]
+  [[ "$output" == *"fresh clones cannot unlock"* ]]
+}
+
 @test "setup --path customizes the clone-root location" {
   modules setup --path deps
   run jq -r '.path' "$PARENT/.modules/config"

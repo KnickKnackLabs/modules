@@ -2,6 +2,7 @@
 #MISE description="Initialize modules in the current repo"
 #MISE dir="{{config_root}}"
 #USAGE flag "--path <path>" help="Clone-root path relative to repo (default: modules)"
+#USAGE flag "--gpg-key <fingerprint>" var=#true help="GPG key fingerprint(s) to add as collaborators"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/common.sh"
@@ -9,6 +10,7 @@ source "$MISE_CONFIG_ROOT/lib/hooks.sh"
 
 require_git
 require_jq
+require_rudi
 
 # ── Resolve and validate requested path ──────────────────────
 
@@ -63,21 +65,69 @@ if [ ! -f "$GITIGNORE" ] || ! grep -qxF "$gitignore_entry" "$GITIGNORE"; then
   echo "$gitignore_entry" >> "$GITIGNORE"
 fi
 
-# ── Encryption: auto-detect via rudi ──────────────────────────
+# ── Encryption: initialize via rudi and assign manifest ───────
 
-if command -v rudi &>/dev/null; then
-  rudi_status="$(cd "$TARGET_DIR" && rudi status --json)" || {
-    echo "Error: rudi status --json failed" >&2
-    exit 1
-  }
-  if echo "$rudi_status" | jq -e '.initialized == true' &>/dev/null; then
-    (cd "$TARGET_DIR" && rudi assign "$MANIFEST_REL") || {
-      echo "Error: rudi assign failed" >&2
-      exit 1
-    }
-    echo "  encryption: manifest assigned to git-crypt"
+cd "$TARGET_DIR"
+rudi_status="$(rudi status --json)" || {
+  echo "Error: rudi status --json failed" >&2
+  exit 1
+}
+
+initialized_rudi=false
+if echo "$rudi_status" | jq -e '.initialized == true' &>/dev/null; then
+  echo "  encryption: git-crypt already initialized"
+else
+  rudi init --no-user
+  initialized_rudi=true
+fi
+
+keys=()
+if [ -n "${usage_gpg_key:-}" ]; then
+  while IFS= read -r key; do
+    keys+=("$key")
+  done < <(printf '%s' "${usage_gpg_key}" | xargs printf '%s\n')
+fi
+
+added=0
+skipped=0
+if [ "${#keys[@]}" -gt 0 ]; then
+  echo ""
+  echo "Adding GPG collaborators..."
+
+  for key in "${keys[@]}"; do
+    [ -z "$key" ] && continue
+    if gpg --list-keys "$key" &>/dev/null; then
+      uid=$(gpg --list-keys --with-colons "$key" 2>/dev/null \
+        | awk -F: '/^uid/{print $10; exit}')
+      echo "  + ${uid:-$key}"
+      rudi add-user "$key"
+      added=$((added + 1))
+    else
+      echo "  - $key — not in local keyring, skipping" >&2
+      skipped=$((skipped + 1))
+    fi
+  done
+
+  if [ "$skipped" -gt 0 ]; then
+    echo ""
+    echo "  $skipped key(s) skipped. Import them first: gpg --import <pubkey.asc>"
+    echo "  Then run: rudi add-user <fingerprint>"
   fi
 fi
+
+if [ "$initialized_rudi" = "true" ] && [ "$added" -eq 0 ]; then
+  cat >&2 <<'WARN'
+WARNING: initialized git-crypt without any GPG collaborators.
+.modules/manifest will be encrypted, but fresh clones cannot unlock it until a user is added and committed.
+Run: rudi add-user <fingerprint>
+WARN
+fi
+
+rudi assign "$MANIFEST_REL" || {
+  echo "Error: rudi assign failed" >&2
+  exit 1
+}
+echo "  encryption: manifest assigned to git-crypt"
 
 # ── Pre-commit hooks ──────────────────────────────────────────
 
