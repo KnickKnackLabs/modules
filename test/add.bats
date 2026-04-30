@@ -104,6 +104,19 @@ setup() {
   [[ "$output" == *"already exists"* ]]
 }
 
+@test "add explains a pre-existing clone directory with a mismatched origin" {
+  local other_remote="$BATS_TEST_TMPDIR/other-remote"
+  create_remote_repo "$other_remote"
+
+  git clone "$other_remote" "$PARENT/modules/remote"
+
+  run modules add "$REMOTE"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"different origin"* ]]
+  [[ "$output" == *"Existing origin: $other_remote"* ]]
+  [[ "$output" == *"Requested URL: $REMOTE"* ]]
+}
+
 @test "add fails with invalid URL" {
   run modules add "file:///nonexistent/repo.git" --name bad-repo
   [ "$status" -ne 0 ]
