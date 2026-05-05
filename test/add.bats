@@ -11,7 +11,7 @@ setup() {
 
   create_remote_repo "$REMOTE"
   create_parent_repo "$PARENT"
-  export CALLER_PWD="$PARENT"
+  export MODULES_CALLER_PWD="$PARENT"
 
   # Initialize modules
   modules setup
@@ -113,7 +113,7 @@ setup() {
 @test "add fails if not initialized" {
   local bare="$BATS_TEST_TMPDIR/bare"
   create_parent_repo "$bare"
-  export CALLER_PWD="$bare"
+  export MODULES_CALLER_PWD="$bare"
 
   run modules add "$REMOTE"
   [ "$status" -eq 1 ]

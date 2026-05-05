@@ -10,11 +10,11 @@ REPO_DIR="$MISE_CONFIG_ROOT"
 
 # Run a modules task through mise.
 modules() {
-  if [ -z "${CALLER_PWD:-}" ]; then
-    echo "CALLER_PWD not set" >&2
+  if [ -z "${MODULES_CALLER_PWD:-}" ]; then
+    echo "MODULES_CALLER_PWD not set" >&2
     return 1
   fi
-  cd "$MISE_CONFIG_ROOT" && CALLER_PWD="$CALLER_PWD" mise run -q "$@"
+  cd "$MISE_CONFIG_ROOT" && MODULES_CALLER_PWD="$MODULES_CALLER_PWD" mise run -q "$@"
 }
 export -f modules
 
@@ -105,9 +105,9 @@ manifest_has_name() {
 export -f manifest_line_of manifest_url_of manifest_pin_of manifest_count_of manifest_has_name
 
 # Import module_path from common.sh — single source of truth.
-# Note: common.sh requires CALLER_PWD; tests using module_path must set it first.
+# Note: common.sh requires MODULES_CALLER_PWD; tests using module_path must set it first.
 # shellcheck source=../lib/common.sh
 # Source in a subshell-safe way: common.sh uses set -euo pipefail but we want the
 # functions available in the current shell.
-CALLER_PWD="${CALLER_PWD:-/tmp}" source "$REPO_DIR/lib/common.sh"
+MODULES_CALLER_PWD="${MODULES_CALLER_PWD:-/tmp}" source "$REPO_DIR/lib/common.sh"
 export -f module_path

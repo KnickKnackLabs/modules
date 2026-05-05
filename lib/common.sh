@@ -3,8 +3,10 @@
 
 set -euo pipefail
 
-# The target repo is always CALLER_PWD (set by shiv shim)
-TARGET_DIR="${CALLER_PWD:-.}"
+# The target repo is the modules invocation cwd (set by the shiv shim).
+# Prefer the package-specific variable; keep CALLER_PWD as a temporary
+# legacy fallback while the ecosystem migrates.
+TARGET_DIR="${MODULES_CALLER_PWD:-${CALLER_PWD:-.}}"
 
 # Where modules metadata lives (tracked; manifest encrypted, config plaintext).
 MODULES_DIR="$TARGET_DIR/.modules"

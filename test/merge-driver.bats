@@ -17,7 +17,7 @@ setup() {
   create_remote_repo "$REMOTE_A"
   create_remote_repo "$REMOTE_B"
   create_parent_repo "$PARENT"
-  export CALLER_PWD="$PARENT"
+  export MODULES_CALLER_PWD="$PARENT"
 
   modules setup
   git -C "$PARENT" commit -m "init modules"
@@ -265,7 +265,7 @@ set_pin() {
   # isolation — check a fresh repo here to see what setup actually writes.)
   local fresh="$BATS_TEST_TMPDIR/fresh-parent"
   create_parent_repo "$fresh"
-  CALLER_PWD="$fresh" modules setup
+  MODULES_CALLER_PWD="$fresh" modules setup
 
   run git -C "$fresh" config --get merge.modules-manifest.driver
   [ "$status" -eq 0 ]
@@ -294,7 +294,7 @@ set_pin() {
   local shim_dir="$BATS_TEST_TMPDIR/path-shim"
   mkdir -p "$shim_dir"
   local shim_log="$BATS_TEST_TMPDIR/shim.log"
-  # Mirror the production shiv shim's behavior: export CALLER_PWD
+  # Mirror the production shiv shim's behavior: export MODULES_CALLER_PWD
   # (the user's original cwd, which git invoked the driver from) so the
   # merge-driver task can cd back to it before resolving the relative
   # %O %A %B paths.
@@ -302,7 +302,7 @@ set_pin() {
 #!/usr/bin/env bash
 set -euo pipefail
 echo "[shim] called: \$*" >> "$shim_log"
-export CALLER_PWD="\$PWD"
+export MODULES_CALLER_PWD="\$PWD"
 cd "$MISE_CONFIG_ROOT"
 exec mise run -q "\$@"
 SHIM
