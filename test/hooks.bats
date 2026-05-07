@@ -11,7 +11,7 @@ setup() {
 
   create_remote_repo "$REMOTE"
   create_parent_repo "$PARENT"
-  export CALLER_PWD="$PARENT"
+  export MODULES_CALLER_PWD="$PARENT"
 
   modules setup
   git -C "$PARENT" commit -m "init modules"
@@ -41,7 +41,7 @@ echo "existing hook ran"
 HOOK
   chmod +x "$fresh/.git/hooks/pre-commit.d/existing-hook"
 
-  export CALLER_PWD="$fresh"
+  export MODULES_CALLER_PWD="$fresh"
   modules setup
 
   # Existing hook should still be there

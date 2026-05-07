@@ -13,14 +13,14 @@ setup() {
 
   create_remote_repo "$REMOTE"
   create_parent_repo "$PARENT"
-  export CALLER_PWD="$PARENT"
+  export MODULES_CALLER_PWD="$PARENT"
 }
 
 @test "roundtrip: setup auto-detects encryption and assigns manifest" {
   cd "$PARENT" && git-crypt init
   git-crypt add-gpg-user --trusted "$TEST_GPG_FINGERPRINT"
 
-  export CALLER_PWD="$PARENT"
+  export MODULES_CALLER_PWD="$PARENT"
   run modules setup
   [ "$status" -eq 0 ]
 
@@ -33,7 +33,7 @@ setup() {
   cd "$PARENT" && git-crypt init
   git-crypt add-gpg-user --trusted "$TEST_GPG_FINGERPRINT"
 
-  export CALLER_PWD="$PARENT"
+  export MODULES_CALLER_PWD="$PARENT"
   modules setup
   git -C "$PARENT" commit -m "init modules"
 
@@ -52,7 +52,7 @@ setup() {
   cd "$PARENT" && git-crypt init
   git-crypt add-gpg-user --trusted "$TEST_GPG_FINGERPRINT"
 
-  export CALLER_PWD="$PARENT"
+  export MODULES_CALLER_PWD="$PARENT"
   modules setup
   git -C "$PARENT" commit -m "init modules"
 
@@ -70,7 +70,7 @@ setup() {
 
   cd "$clone" && git-crypt unlock
 
-  export CALLER_PWD="$clone"
+  export MODULES_CALLER_PWD="$clone"
   modules init
 
   [ -d "$clone/modules/my-repo/.git" ]
@@ -83,7 +83,7 @@ setup() {
   cd "$PARENT" && git-crypt init
   git-crypt add-gpg-user --trusted "$TEST_GPG_FINGERPRINT"
 
-  export CALLER_PWD="$PARENT"
+  export MODULES_CALLER_PWD="$PARENT"
   modules setup
   git -C "$PARENT" commit -m "init modules"
 

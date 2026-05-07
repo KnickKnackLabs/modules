@@ -8,7 +8,7 @@ setup() {
 
   PARENT="$BATS_TEST_TMPDIR/parent"
   create_parent_repo "$PARENT"
-  export CALLER_PWD="$PARENT"
+  export MODULES_CALLER_PWD="$PARENT"
 
   modules setup
   git -C "$PARENT" commit -m "init modules"

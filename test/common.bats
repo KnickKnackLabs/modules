@@ -8,8 +8,8 @@ setup() {
   # Fresh fake repo per test so config writes don't leak between cases
   FAKE_REPO="$BATS_TEST_TMPDIR/fake-repo"
   mkdir -p "$FAKE_REPO"
-  CALLER_PWD="$FAKE_REPO"
-  export CALLER_PWD
+  MODULES_CALLER_PWD="$FAKE_REPO"
+  export MODULES_CALLER_PWD
   source "$REPO_DIR/lib/common.sh"
 }
 
@@ -17,6 +17,15 @@ setup() {
   local p
   p="$(module_path "fold")"
   [ "$p" = "$FAKE_REPO/modules/fold" ]
+}
+
+@test "common.sh accepts legacy CALLER_PWD fallback during migration" {
+  local legacy_repo="$BATS_TEST_TMPDIR/legacy-repo"
+  mkdir -p "$legacy_repo"
+
+  run env -u MODULES_CALLER_PWD CALLER_PWD="$legacy_repo" bash -c 'source "$1"; module_path fold' _ "$REPO_DIR/lib/common.sh"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$legacy_repo/modules/fold" ]
 }
 
 @test "module_path honors .modules/config path override" {

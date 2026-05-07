@@ -17,7 +17,7 @@ setup() {
   create_remote_repo "$REMOTE_A"
   create_remote_repo "$REMOTE_B"
   create_parent_repo "$PARENT"
-  export CALLER_PWD="$PARENT"
+  export MODULES_CALLER_PWD="$PARENT"
 
   modules setup
   git -C "$PARENT" commit -m "init modules"
@@ -28,7 +28,7 @@ setup() {
   # release version without the merge-driver task — rewrite the config to
   # point at the local driver script so tests exercise the in-tree code.
   git -C "$PARENT" config merge.modules-manifest.driver \
-    "bash $MISE_CONFIG_ROOT/lib/manifest-merge-driver.sh %O %A %B"
+    "bash $REPO_DIR/lib/manifest-merge-driver.sh %O %A %B"
 }
 
 # ── Union merge (no conflicts) ─────────────────────────────────
@@ -241,7 +241,7 @@ set_pin() {
   run git -C "$PARENT" config --get merge.modules-manifest.driver
   [ "$status" -eq 0 ]
   [[ "$output" != *"/"* ]]
-  [[ "$output" != *"$MISE_CONFIG_ROOT"* ]]
+  [[ "$output" != *"$REPO_DIR"* ]]
 }
 
 @test "install-hooks adds merge attr to .gitattributes" {
@@ -266,7 +266,7 @@ set_pin() {
   # isolation — check a fresh repo here to see what setup actually writes.)
   local fresh="$BATS_TEST_TMPDIR/fresh-parent"
   create_parent_repo "$fresh"
-  CALLER_PWD="$fresh" modules setup
+  MODULES_CALLER_PWD="$fresh" modules setup
 
   run git -C "$fresh" config --get merge.modules-manifest.driver
   [ "$status" -eq 0 ]
@@ -276,7 +276,7 @@ set_pin() {
 # ── End-to-end: production driver-resolution path ──────────────
 #
 # The setup() in this file rewrites the driver config to a direct
-# `bash $MISE_CONFIG_ROOT/lib/manifest-merge-driver.sh ...` invocation
+# `bash $REPO_DIR/lib/manifest-merge-driver.sh ...` invocation
 # so the merge-logic tests don't depend on a `modules` shim being on
 # PATH. That isolates the merge logic but leaves the production
 # resolution path (`modules merge-driver %O %A %B` → PATH lookup →
@@ -295,7 +295,7 @@ set_pin() {
   local shim_dir="$BATS_TEST_TMPDIR/path-shim"
   mkdir -p "$shim_dir"
   local shim_log="$BATS_TEST_TMPDIR/shim.log"
-  # Mirror the production shiv shim's behavior: export CALLER_PWD
+  # Mirror the production shiv shim's behavior: export MODULES_CALLER_PWD
   # (the user's original cwd, which git invoked the driver from) so the
   # merge-driver task can cd back to it before resolving the relative
   # %O %A %B paths.
@@ -303,8 +303,8 @@ set_pin() {
 #!/usr/bin/env bash
 set -euo pipefail
 echo "[shim] called: \$*" >> "$shim_log"
-export CALLER_PWD="\$PWD"
-cd "$MISE_CONFIG_ROOT"
+export MODULES_CALLER_PWD="\$PWD"
+cd "$REPO_DIR"
 exec mise run -q "\$@"
 SHIM
   chmod +x "$shim_dir/modules"

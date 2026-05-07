@@ -8,7 +8,7 @@ setup() {
 
   PARENT="$BATS_TEST_TMPDIR/parent"
   create_parent_repo "$PARENT"
-  export CALLER_PWD="$PARENT"
+  export MODULES_CALLER_PWD="$PARENT"
 }
 
 @test "setup creates manifest at .modules/manifest" {
@@ -166,8 +166,8 @@ setup() {
 }
 
 @test "setup fails outside a git repo" {
-  export CALLER_PWD="$BATS_TEST_TMPDIR/not-a-repo"
-  mkdir -p "$CALLER_PWD"
+  export MODULES_CALLER_PWD="$BATS_TEST_TMPDIR/not-a-repo"
+  mkdir -p "$MODULES_CALLER_PWD"
   run modules setup
   [ "$status" -eq 1 ]
   [[ "$output" == *"not a git repository"* ]]
