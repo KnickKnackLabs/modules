@@ -210,7 +210,7 @@ set_pin() {
   git -C "$PARENT" merge --no-edit branch-a
 
   # All lines should have exactly 3 tab-separated fields, or 4 when a
-  # tracking ref is present.
+  # tracking branch is present.
   local bad
   bad="$(awk -F'\t' 'NF != 3 && NF != 4' "$PARENT/.modules/manifest" || true)"
   [ -z "$bad" ]

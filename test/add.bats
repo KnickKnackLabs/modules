@@ -51,7 +51,7 @@ setup() {
   [ "$fields" = "3" ]
 }
 
-@test "add with --track records tracking ref" {
+@test "add with --track records tracking branch" {
   modules add "$REMOTE" --name tracked --track main
 
   local pin track expected

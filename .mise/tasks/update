@@ -67,14 +67,7 @@ sync_untracked_module() {
 sync_tracked_module() {
   local name="$1" mod_path="$2" track="$3"
 
-  if ! git -C "$mod_path" fetch -q origin "$track" 2>&1; then
-    echo "  $name: failed to fetch tracked ref '$track'" >&2
-    return 1
-  fi
-  if ! git -C "$mod_path" checkout -q FETCH_HEAD 2>&1; then
-    echo "  $name: failed to checkout tracked ref '$track'" >&2
-    return 1
-  fi
+  sync_tracked_branch "$name" "$mod_path" "$track"
 }
 
 commit_message() {

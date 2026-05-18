@@ -39,7 +39,7 @@ setup() {
   [ "$old_pin" != "$new_pin" ]
 }
 
-@test "update tracked module advances pin from tracked ref and preserves track" {
+@test "update tracked module advances pin from tracked branch and preserves track" {
   modules add "$REMOTE" --name tracked --track main
   git -C "$PARENT" commit -m "add tracked module"
 
@@ -55,11 +55,28 @@ setup() {
   [[ "$output" == *"tracking main"* ]]
   [[ "$output" == *"updated"* ]]
 
-  local new_pin track
+  local new_pin track branch upstream
   new_pin="$(manifest_pin_of "$PARENT/.modules/manifest" "tracked")"
   track="$(manifest_track_of "$PARENT/.modules/manifest" "tracked")"
+  branch="$(git -C "$PARENT/modules/tracked" symbolic-ref --short HEAD)"
+  upstream="$(git -C "$PARENT/modules/tracked" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}')"
   [ "$old_pin" != "$new_pin" ]
   [ "$track" = "main" ]
+  [ "$branch" = "main" ]
+  [ "$upstream" = "origin/main" ]
+}
+
+@test "update refuses tracked branch with local-only commits" {
+  modules add "$REMOTE" --name tracked --track main
+  git -C "$PARENT" commit -m "add tracked module"
+
+  echo "local work" > "$PARENT/modules/tracked/local.md"
+  git -C "$PARENT/modules/tracked" add local.md
+  git -C "$PARENT/modules/tracked" commit -m "local work"
+
+  run modules update tracked
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"commits not in origin/main"* ]]
 }
 
 @test "update --commit commits manifest changes" {
