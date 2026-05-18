@@ -33,4 +33,5 @@ if ! $has_target; then
   resolved+=("$TEST_DIR/")
 fi
 
-exec bats "${resolved[@]}"
+parallel_args=(--jobs 8 --parallel-binary-name rush)
+exec bats "${parallel_args[@]}" "${resolved[@]}"
