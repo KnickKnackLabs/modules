@@ -212,7 +212,7 @@ modules unlock && modules init`}</CodeBlock>
           <Bold>Encrypted manifest</Bold>
           {" — "}
           <Code>.modules/manifest</Code>
-          {" holds all submodule state (name, URL, pin, and optional tracking ref). "}
+          {" holds all submodule state (name, URL, pin, and optional tracking branch). "}
           <Code>modules setup</Code>
           {" initializes "}
           <Link href="https://github.com/KnickKnackLabs/rudi">rudi</Link>
@@ -301,7 +301,7 @@ mise run test`}</CodeBlock>
         "├── .mise/tasks/",
         "│   ├── setup           # Initialize manifest, config, gitignore, hooks, merge driver",
         "│   ├── add             # Clone into modules/<name>, record in manifest",
-        "│   ├── init            # Populate modules; refresh tracked clones from their ref",
+        "│   ├── init            # Populate modules; refresh tracked clones from their branch",
         "│   ├── list            # Show modules (table or --json)",
         "│   ├── status          # Show at-pin / changed / missing",
         "│   ├── update          # Pull latest, update pinned SHA, optionally commit",

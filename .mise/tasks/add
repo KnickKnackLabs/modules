@@ -4,7 +4,7 @@
 #USAGE arg "<url>" help="Git URL of the repo to add"
 #USAGE flag "--name <name>" help="Module name (default: derived from URL)"
 #USAGE flag "--ref <ref>" help="Git ref to pin (default: HEAD)"
-#USAGE flag "--track <ref>" help="Track this ref during init/update while retaining a pinned SHA"
+#USAGE flag "--track <branch>" help="Track this branch during init/update while retaining a pinned SHA"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/common.sh"
@@ -12,6 +12,8 @@ source "$MISE_CONFIG_ROOT/lib/common.sh"
 require_git
 require_initialized
 
+# Populated by mise from the #USAGE arg above.
+# shellcheck disable=SC2154
 url="$usage_url"
 
 if [ -n "${usage_name:-}" ]; then

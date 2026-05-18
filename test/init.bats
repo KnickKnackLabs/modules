@@ -82,11 +82,63 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"tracking main"* ]]
 
-  local actual pin_after
+  local actual pin_after branch upstream
   actual="$(repo_head "$PARENT/modules/tracked")"
   pin_after="$(manifest_pin_of "$PARENT/.modules/manifest" "tracked")"
+  branch="$(git -C "$PARENT/modules/tracked" symbolic-ref --short HEAD)"
+  upstream="$(git -C "$PARENT/modules/tracked" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}')"
   [ "$actual" = "$latest" ]
   [ "$pin_after" = "$old_pin" ]
+  [ "$branch" = "main" ]
+  [ "$upstream" = "origin/main" ]
+}
+
+@test "init converts detached tracked clone back to local tracking branch" {
+  modules add "$REMOTE" --name tracked --track main
+  git -C "$PARENT" commit -m "add tracked module"
+
+  git -C "$PARENT/modules/tracked" checkout -q --detach HEAD
+
+  echo "fresh" > "$REMOTE/fresh.md"
+  git -C "$REMOTE" add fresh.md
+  git -C "$REMOTE" commit -m "fresh commit"
+  local latest
+  latest="$(repo_head "$REMOTE")"
+
+  run modules init
+  [ "$status" -eq 0 ]
+
+  local actual branch upstream
+  actual="$(repo_head "$PARENT/modules/tracked")"
+  branch="$(git -C "$PARENT/modules/tracked" symbolic-ref --short HEAD)"
+  upstream="$(git -C "$PARENT/modules/tracked" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}')"
+  [ "$actual" = "$latest" ]
+  [ "$branch" = "main" ]
+  [ "$upstream" = "origin/main" ]
+}
+
+@test "init refuses dirty tracked clones" {
+  modules add "$REMOTE" --name tracked --track main
+
+  echo "local work" > "$PARENT/modules/tracked/local.md"
+
+  run modules init
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"uncommitted changes"* ]]
+}
+
+@test "init refuses detached tracked clones with local-only commits" {
+  modules add "$REMOTE" --name tracked --track main
+  git -C "$PARENT" commit -m "add tracked module"
+
+  git -C "$PARENT/modules/tracked" checkout -q --detach HEAD
+  echo "detached work" > "$PARENT/modules/tracked/detached.md"
+  git -C "$PARENT/modules/tracked" add detached.md
+  git -C "$PARENT/modules/tracked" commit -m "detached local work"
+
+  run modules init
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"detached HEAD has commits not in origin/main"* ]]
 }
 
 @test "init reports failure when clone fails" {

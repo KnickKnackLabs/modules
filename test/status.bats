@@ -50,7 +50,7 @@ setup() {
   [[ "$output" == *"missing"* ]]
 }
 
-@test "status shows tracking ref" {
+@test "status shows tracking branch" {
   modules add "$REMOTE" --name tracked --track main
 
   echo "new" > "$REMOTE/new.md"

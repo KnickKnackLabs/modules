@@ -19,7 +19,10 @@ CONFIG="$MODULES_DIR/config"
 MODULES_LAYOUT_VERSION="0.9.0"
 
 # Paths tracked in git-relative form (for hooks / diff matching).
+# These constants are consumed by task scripts after sourcing this file.
+# shellcheck disable=SC2034
 MANIFEST_REL=".modules/manifest"
+# shellcheck disable=SC2034
 CONFIG_REL=".modules/config"
 
 # Default clone-root path (relative to repo root) if no config is set.
@@ -110,13 +113,84 @@ module_path() {
   echo "$(clones_dir)/$name"
 }
 
+# Sync a tracked module to a local branch following origin/<branch>.
+#
+# Tracked modules are editable checkouts, not immutable dependency pins. Keep
+# them on a normal local branch so `git status`, `git pull`, and topic-branch
+# workflows behave like users expect. Refuse dirty/ahead/diverged checkouts
+# instead of silently overwriting local work.
+sync_tracked_branch() {
+  local name="$1" mod_path="$2" branch="$3"
+
+  local dirty
+  if ! dirty="$(git -C "$mod_path" status --porcelain)"; then
+    echo "  $name: failed to inspect worktree before syncing tracked branch '$branch'" >&2
+    return 1
+  fi
+  if [ -n "$dirty" ]; then
+    echo "  $name: worktree has uncommitted changes; refusing to sync tracked branch '$branch'" >&2
+    return 1
+  fi
+
+  if ! git -C "$mod_path" fetch -q origin "refs/heads/$branch:refs/remotes/origin/$branch" 2>&1; then
+    echo "  $name: failed to fetch tracked branch '$branch'" >&2
+    return 1
+  fi
+
+  local current_branch current_head
+  if ! current_branch="$(git -C "$mod_path" symbolic-ref --quiet --short HEAD)"; then
+    current_branch=""
+  fi
+  current_head="$(git -C "$mod_path" rev-parse HEAD)"
+  if [ -z "$current_branch" ] && ! git -C "$mod_path" merge-base --is-ancestor "$current_head" "origin/$branch"; then
+    echo "  $name: detached HEAD has commits not in origin/$branch; refusing to overwrite" >&2
+    return 1
+  fi
+
+  if git -C "$mod_path" show-ref --verify --quiet "refs/heads/$branch"; then
+    if ! git -C "$mod_path" checkout -q "$branch" 2>&1; then
+      echo "  $name: failed to checkout local branch '$branch'" >&2
+      return 1
+    fi
+  else
+    if ! git -C "$mod_path" checkout -q -b "$branch" --track "origin/$branch" 2>&1; then
+      echo "  $name: failed to create local branch '$branch' tracking origin/$branch" >&2
+      return 1
+    fi
+  fi
+
+  if ! git -C "$mod_path" branch --set-upstream-to="origin/$branch" "$branch" >/dev/null 2>&1; then
+    echo "  $name: failed to set upstream for '$branch' to origin/$branch" >&2
+    return 1
+  fi
+
+  local local_sha remote_sha
+  local_sha="$(git -C "$mod_path" rev-parse "$branch")"
+  remote_sha="$(git -C "$mod_path" rev-parse "origin/$branch")"
+
+  if [ "$local_sha" = "$remote_sha" ]; then
+    return 0
+  fi
+
+  if git -C "$mod_path" merge-base --is-ancestor "$local_sha" "$remote_sha"; then
+    if ! git -C "$mod_path" merge --ff-only -q "origin/$branch" 2>&1; then
+      echo "  $name: failed to fast-forward '$branch' to origin/$branch" >&2
+      return 1
+    fi
+    return 0
+  fi
+
+  echo "  $name: local branch '$branch' has commits not in origin/$branch; refusing to overwrite" >&2
+  return 1
+}
+
 # ── Manifest operations ──────────────────────────────────────
 #
 # Manifest format: tab-separated lines, sorted by name.
 #   <name>\t<url>\t<pin>[\t<track>]\n
 #
-# The optional fourth field is a tracking ref. Pins remain the durable
-# recorded state; tracking refs let selected modules refresh their local
+# The optional fourth field is a tracking branch. Pins remain the durable
+# recorded state; tracking branches let selected modules refresh their local
 # gitignored clone during init without dirtying the parent repo.
 #
 # Line-oriented form lets us use a trivial union merge driver (adapted
@@ -170,7 +244,7 @@ manifest_pin() {
   manifest_get "$name" | cut -f3
 }
 
-# Print the optional tracking ref for a name (empty if untracked).
+# Print the optional tracking branch for a name (empty if untracked).
 manifest_track() {
   local name="$1"
   manifest_get "$name" | cut -f4

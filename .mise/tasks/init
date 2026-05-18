@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-#MISE description="Clone modules and refresh tracked clones from their ref"
+#MISE description="Clone modules and refresh tracked clones from their branch"
 #MISE dir="{{config_root}}"
 set -euo pipefail
 
@@ -21,14 +21,7 @@ clones_rel="$(clones_path_rel)"
 sync_to_track() {
   local name="$1" mod_path="$2" track="$3"
 
-  if ! git -C "$mod_path" fetch -q origin "$track" 2>&1; then
-    echo "  $name: failed to fetch tracked ref '$track'" >&2
-    return 1
-  fi
-  if ! git -C "$mod_path" checkout -q FETCH_HEAD 2>&1; then
-    echo "  $name: failed to checkout tracked ref '$track'" >&2
-    return 1
-  fi
+  sync_tracked_branch "$name" "$mod_path" "$track" || return 1
 
   local actual
   actual="$(git -C "$mod_path" rev-parse HEAD)"
