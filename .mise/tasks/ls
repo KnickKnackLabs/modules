@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#MISE description="Alias for list"
+#MISE dir="{{config_root}}"
+#USAGE flag "--json" default=#false help="Output as JSON"
+set -euo pipefail
+
+args=()
+if [ "${usage_json:-}" = "true" ]; then
+  args+=(--json)
+fi
+
+exec mise run -q list ${args[@]+"${args[@]}"}

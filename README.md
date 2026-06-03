@@ -8,7 +8,7 @@ Manage repo-level dependencies with an encrypted manifest and a gitignored clone
 A public observer sees only 'this repo uses modules' — no names, no pinned commits, no count.
 
 ![lang: bash](https://img.shields.io/badge/lang-bash-4EAA25?style=flat&logo=gnubash&logoColor=white)
-[![tests: 119 passing](https://img.shields.io/badge/tests-119%20passing-brightgreen?style=flat)](test/)
+[![tests: 121 passing](https://img.shields.io/badge/tests-121%20passing-brightgreen?style=flat)](test/)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat)
 
 </div>
@@ -104,6 +104,7 @@ What a public observer sees on GitHub (locked):
 | `modules install-hooks`                                              | Install git merge driver for the modules manifest                         |
 | `modules list [--json]`                                              | List modules                                                              |
 | `modules lock`                                                       | Lock encrypted manifest (re-encrypt on disk)                              |
+| `modules ls [--json]`                                                | Alias for list                                                            |
 | `modules merge-driver <ancestor> <current> <other>`                  | Custom git merge driver for .modules/manifest (invoked by git, not users) |
 | `modules remove <name>`                                              | Remove a module                                                           |
 | `modules setup [--path <path>] [--gpg-key <fingerprint>]`            | Initialize modules in the current repo                                    |
@@ -121,7 +122,7 @@ cd modules && mise trust && mise install
 mise run test
 ```
 
-**119 tests** across 13 suites, using [BATS](https://github.com/bats-core/bats-core). All tests use local git repos in temp directories — no network, no external dependencies.
+**121 tests** across 13 suites, using [BATS](https://github.com/bats-core/bats-core). All tests use local git repos in temp directories — no network, no external dependencies.
 
 The `git-mechanics` suite verifies git's behavior around gitignored nested repos. The `merge-driver` suite simulates concurrent pin bumps to validate the manifest merge logic. The `roundtrip` suite drives the full setup → add → lock → fresh-clone → unlock → init path end-to-end with git-crypt.
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="List modules"
 #MISE dir="{{config_root}}"
-#USAGE flag "--json" help="Output as JSON"
+#USAGE flag "--json" default=#false help="Output as JSON"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/common.sh"

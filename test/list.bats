@@ -23,6 +23,12 @@ setup() {
   [[ "$output" == *"No modules"* ]]
 }
 
+@test "ls aliases list for empty output" {
+  run modules ls
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No modules"* ]]
+}
+
 @test "list shows module after add" {
   modules add "$REMOTE" --name my-repo
   run modules list
@@ -37,6 +43,14 @@ setup() {
   [ "$status" -eq 0 ]
 
   # Should be parseable JSON with our module
+  echo "$output" | jq -e '.["my-repo"].url' >/dev/null
+}
+
+@test "ls --json aliases list --json" {
+  modules add "$REMOTE" --name my-repo
+  run modules ls --json
+  [ "$status" -eq 0 ]
+
   echo "$output" | jq -e '.["my-repo"].url' >/dev/null
 }
 
