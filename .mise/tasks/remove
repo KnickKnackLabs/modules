@@ -17,7 +17,7 @@ if ! manifest_has "$name"; then
   exit 1
 fi
 
-confirm_or_require_yes "Remove module '$name'?" || exit 1
+confirm_or_require_yes "Remove module '$name'?"
 
 mod_path="$(module_path "$name")"
 

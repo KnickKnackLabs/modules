@@ -206,23 +206,41 @@ sync_tracked_branch() {
 
 # ── Confirm-or-require-yes ─────────────────────────────────────
 
-# Confirm a destructive operation or require --yes to proceed.
+is_truthy() {
+  case "${1:-}" in
+    true | 1 | yes | y) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Confirm a destructive operation or require explicit approval to proceed.
 # The calling task must declare #USAGE flag "-y --yes" default=#false so
-# that mise sets usage_yes=true when the flag is passed.
-# Returns 0 if confirmed, 1 if refused.
+# that mise sets usage_yes=true when the flag is passed. MODULES_YES is an
+# explicit automation bypass; MODULES_CONFIRM_TTY is a test seam.
 confirm_or_require_yes() {
   local message="$1"
+  local tty_path="${MODULES_CONFIRM_TTY:-/dev/tty}"
 
-  if [ "${usage_yes:-}" = "true" ]; then
+  if is_truthy "${usage_yes:-false}" || is_truthy "${MODULES_YES:-}"; then
     return 0
   fi
 
-  if [ -t 0 ] && [ -t 1 ] && [ -z "${BATS_TEST_NAME:-}" ] && [ -z "${CI:-}" ]; then
-    gum confirm "$message" && return 0 || return 1
+  if [ ! -c "$tty_path" ] || ! { : <"$tty_path"; } 2>/dev/null || ! { : >"$tty_path"; } 2>/dev/null; then
+    echo "Error: confirmation required for destructive operation." >&2
+    echo "$message" >&2
+    echo "Re-run with --yes to confirm." >&2
+    return 2
   fi
 
-  echo "  Re-run with --yes to confirm." >&2
-  return 1
+  # /dev/tty (or MODULES_CONFIRM_TTY in tests) is intentionally both the
+  # prompt input and output device; it is not a regular data file.
+  # shellcheck disable=SC2094
+  if gum confirm "$message" <"$tty_path" >"$tty_path" 2>"$tty_path"; then
+    return 0
+  fi
+
+  echo "Aborted." >&2
+  return 2
 }
 
 # ── Manifest operations ──────────────────────────────────────

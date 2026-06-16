@@ -58,8 +58,12 @@ setup() {
   modules add "$REMOTE" --name my-repo
   git -C "$PARENT" commit -m "add module"
 
+  unset MODULES_YES
+  export MODULES_CONFIRM_TTY="$BATS_TEST_TMPDIR/missing-tty"
   run modules remove my-repo
-  [ "$status" -eq 1 ]
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"confirmation required"* ]]
+  [[ "$output" == *"Remove module 'my-repo'?"* ]]
   [[ "$output" == *"--yes"* ]]
 
   # Clone should still exist
@@ -76,12 +80,30 @@ setup() {
   # Delete clone to simulate missing state
   rm -rf "$PARENT/modules/my-repo"
 
+  unset MODULES_YES
+  export MODULES_CONFIRM_TTY="$BATS_TEST_TMPDIR/missing-tty"
   run modules remove my-repo
-  [ "$status" -eq 1 ]
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"confirmation required"* ]]
   [[ "$output" == *"--yes"* ]]
 
   # Manifest entry should still exist
   manifest_has_name "$PARENT/.modules/manifest" "my-repo"
+}
+
+@test "remove accepts MODULES_YES automation bypass" {
+  modules add "$REMOTE" --name my-repo
+  git -C "$PARENT" commit -m "add module"
+
+  export MODULES_YES=1
+  export MODULES_CONFIRM_TTY="$BATS_TEST_TMPDIR/missing-tty"
+  run modules remove my-repo
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Removed"* ]]
+
+  [ ! -d "$PARENT/modules/my-repo" ]
+  run manifest_count_of "$PARENT/.modules/manifest"
+  [ "$output" = "0" ]
 }
 
 @test "remove works when module was never cloned" {
