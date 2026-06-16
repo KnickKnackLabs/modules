@@ -442,9 +442,11 @@ EOF
   create_parent_repo "$fresh"
   mkdir -p "$fresh/.git/hooks/pre-commit.d"
 
-  # Create a custom pre-commit dispatcher
+  # Create a custom pre-commit dispatcher with a marker that the stock
+  # dispatcher does not contain, so this test proves it was preserved.
   cat > "$fresh/.git/hooks/pre-commit" <<'DISPATCH'
 #!/usr/bin/env bash
+# CUSTOM_DISPATCHER_MARKER
 for hook in "$(dirname "$0")/pre-commit.d"/*; do
   [ -x "$hook" ] && "$hook" || exit $?
 done
@@ -457,11 +459,30 @@ DISPATCH
   export MODULES_CALLER_PWD="$fresh"
   modules install-hooks
 
-  # Custom hook content should not have been touched
+  # Custom dispatcher and custom hook should not have been touched.
   run cat "$fresh/.git/hooks/pre-commit"
-  [[ "$output" == *"pre-commit.d"* ]]
-  # Custom hook in pre-commit.d should still be there
+  [[ "$output" == *"CUSTOM_DISPATCHER_MARKER"* ]]
   [ -x "$fresh/.git/hooks/pre-commit.d/existing-hook" ]
+}
+
+@test "install-hooks works from a linked worktree" {
+  local primary="$BATS_TEST_TMPDIR/linked-primary"
+  local linked="$BATS_TEST_TMPDIR/linked-worktree"
+  create_parent_repo "$primary"
+  git -C "$primary" worktree add -q --detach "$linked"
+
+  local common_hooks
+  common_hooks="$(git -C "$primary" rev-parse --absolute-git-dir)/hooks"
+  rm -rf "$common_hooks/pre-commit" "$common_hooks/pre-commit.d"
+  [ -f "$linked/.git" ]
+
+  MODULES_CALLER_PWD="$linked" modules install-hooks
+
+  [ -x "$common_hooks/pre-commit" ]
+  [ -x "$common_hooks/pre-commit.d/gitmodules-guard" ]
+  [ -x "$common_hooks/pre-commit.d/manifest-encryption" ]
+  [ ! -d "$linked/.git/hooks" ]
+  grep -qF ".modules/manifest merge=modules-manifest" "$linked/.gitattributes"
 }
 
 @test "install-hooks removes obsolete path-obfuscation hook" {
