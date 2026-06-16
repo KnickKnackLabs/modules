@@ -132,21 +132,7 @@ echo "  encryption: manifest assigned to git-crypt"
 
 # ── Pre-commit hooks ──────────────────────────────────────────
 
-HOOKS_SRC="$MISE_CONFIG_ROOT/hooks"
-HOOKS_DST="$TARGET_DIR/.git/hooks"
-
-if [ ! -x "$HOOKS_DST/pre-commit" ]; then
-  cp "$HOOKS_SRC/dispatcher" "$HOOKS_DST/pre-commit"
-  chmod +x "$HOOKS_DST/pre-commit"
-fi
-
-mkdir -p "$HOOKS_DST/pre-commit.d"
-for hook in gitmodules-guard manifest-encryption; do
-  cp "$HOOKS_SRC/$hook" "$HOOKS_DST/pre-commit.d/$hook"
-  chmod +x "$HOOKS_DST/pre-commit.d/$hook"
-done
-
-rm -f "$HOOKS_DST/pre-commit.d/path-obfuscation"
+install_pre_commit_hooks
 
 # ── Manifest merge driver ────────────────────────────────
 # Required to safely merge concurrent pin bumps (notes#48-class bug).

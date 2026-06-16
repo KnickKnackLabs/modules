@@ -2,6 +2,36 @@
 # hooks.sh — git hook / merge driver installation helpers.
 # Sourced by setup + install-hooks tasks.
 
+git_common_dir_abs() {
+  local common_dir
+  common_dir="$(git -C "$TARGET_DIR" rev-parse --git-common-dir)"
+  case "$common_dir" in
+    /*) echo "$common_dir" ;;
+    *) echo "$TARGET_DIR/$common_dir" ;;
+  esac
+}
+
+install_pre_commit_hooks() {
+  local hooks_src hooks_dst hook lib_dir
+  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  hooks_src="$(cd "$lib_dir/../hooks" && pwd)"
+  hooks_dst="$(git_common_dir_abs)/hooks"
+
+  if [ ! -x "$hooks_dst/pre-commit" ]; then
+    mkdir -p "$hooks_dst"
+    cp "$hooks_src/dispatcher" "$hooks_dst/pre-commit"
+    chmod +x "$hooks_dst/pre-commit"
+  fi
+
+  mkdir -p "$hooks_dst/pre-commit.d"
+  for hook in gitmodules-guard manifest-encryption; do
+    cp "$hooks_src/$hook" "$hooks_dst/pre-commit.d/$hook"
+    chmod +x "$hooks_dst/pre-commit.d/$hook"
+  done
+
+  rm -f "$hooks_dst/pre-commit.d/path-obfuscation"
+}
+
 # Install the manifest merge driver.
 # Registers a git config entry + adds .gitattributes merge= pattern.
 install_manifest_merge_driver() {
