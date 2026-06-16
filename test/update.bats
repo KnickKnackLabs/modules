@@ -93,6 +93,43 @@ setup() {
   [[ "$output" == *"detached HEAD has commits not in origin/main"* ]]
 }
 
+@test "update refuses dirty untracked clone" {
+  modules add "$REMOTE" --name untr
+  git -C "$PARENT" commit -m "add module"
+
+  local old_pin
+  old_pin="$(manifest_pin_of "$PARENT/.modules/manifest" "untr")"
+
+  # upstream advances, local clone has a colliding uncommitted edit
+  echo "upstream" > "$REMOTE/README.md"
+  git -C "$REMOTE" add README.md
+  git -C "$REMOTE" commit -m "upstream edits readme"
+  echo "local uncommitted" > "$PARENT/modules/untr/README.md"
+
+  run modules update untr
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"uncommitted changes"* ]]
+  [[ "$output" == *"modules/untr"* ]]
+
+  # pin must not have advanced
+  [ "$(manifest_pin_of "$PARENT/.modules/manifest" "untr")" = "$old_pin" ]
+}
+
+@test "update ignores untracked files in untracked clone" {
+  modules add "$REMOTE" --name untr
+  git -C "$PARENT" commit -m "add module"
+
+  echo "upstream" > "$REMOTE/README.md"
+  git -C "$REMOTE" add README.md
+  git -C "$REMOTE" commit -m "upstream edits readme"
+  echo "scratch" > "$PARENT/modules/untr/scratch.txt"
+
+  run modules update untr
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"updated"* ]]
+  [ -f "$PARENT/modules/untr/scratch.txt" ]
+}
+
 @test "update --commit commits manifest changes" {
   modules add "$REMOTE" --name my-repo
   git -C "$PARENT" commit -m "add module"
