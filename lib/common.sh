@@ -113,6 +113,34 @@ module_path() {
   echo "$(clones_dir)/$name"
 }
 
+# Refuse to sync a module whose clone has uncommitted changes. Names the module
+# and its clone path so the user can find the gitignored clone (#32).
+# Usage: assert_module_clean <name> <mod_path> <context> [tracked-only]
+assert_module_clean() {
+  local name="$1" mod_path="$2" context="$3" mode="${4:-all}" dirty
+  if [ "$mode" = "tracked-only" ]; then
+    if ! git -C "$mod_path" update-index -q --refresh; then
+      echo "  $name: failed to inspect worktree before $context" >&2
+      return 1
+    fi
+    if ! git -C "$mod_path" diff-index --quiet HEAD --; then
+      echo "  $name: worktree has uncommitted changes in $mod_path; refusing to $context" >&2
+      echo "  Commit or stash them in $mod_path, then re-run 'modules update'." >&2
+      return 1
+    fi
+    return 0
+  fi
+  if ! dirty="$(git -C "$mod_path" status --porcelain)"; then
+    echo "  $name: failed to inspect worktree before $context" >&2
+    return 1
+  fi
+  if [ -n "$dirty" ]; then
+    echo "  $name: worktree has uncommitted changes in $mod_path; refusing to $context" >&2
+    echo "  Commit or stash them in $mod_path, then re-run 'modules update'." >&2
+    return 1
+  fi
+}
+
 # Sync a tracked module to a local branch following origin/<branch>.
 #
 # Tracked modules are editable checkouts, not immutable dependency pins. Keep
@@ -122,15 +150,7 @@ module_path() {
 sync_tracked_branch() {
   local name="$1" mod_path="$2" branch="$3"
 
-  local dirty
-  if ! dirty="$(git -C "$mod_path" status --porcelain)"; then
-    echo "  $name: failed to inspect worktree before syncing tracked branch '$branch'" >&2
-    return 1
-  fi
-  if [ -n "$dirty" ]; then
-    echo "  $name: worktree has uncommitted changes; refusing to sync tracked branch '$branch'" >&2
-    return 1
-  fi
+  assert_module_clean "$name" "$mod_path" "sync tracked branch '$branch'" || return 1
 
   if ! git -C "$mod_path" fetch -q origin "refs/heads/$branch:refs/remotes/origin/$branch" 2>&1; then
     echo "  $name: failed to fetch tracked branch '$branch'" >&2
@@ -182,6 +202,45 @@ sync_tracked_branch() {
 
   echo "  $name: local branch '$branch' has commits not in origin/$branch; refusing to overwrite" >&2
   return 1
+}
+
+# ── Confirm-or-require-yes ─────────────────────────────────────
+
+is_truthy() {
+  case "${1:-}" in
+    true | 1 | yes | y) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Confirm a destructive operation or require explicit approval to proceed.
+# The calling task must declare #USAGE flag "-y --yes" default=#false so
+# that mise sets usage_yes=true when the flag is passed. MODULES_YES is an
+# explicit automation bypass; MODULES_CONFIRM_TTY is a test seam.
+confirm_or_require_yes() {
+  local message="$1"
+  local tty_path="${MODULES_CONFIRM_TTY:-/dev/tty}"
+
+  if is_truthy "${usage_yes:-false}" || is_truthy "${MODULES_YES:-}"; then
+    return 0
+  fi
+
+  if [ ! -c "$tty_path" ] || ! { : <"$tty_path"; } 2>/dev/null || ! { : >"$tty_path"; } 2>/dev/null; then
+    echo "Error: confirmation required for destructive operation." >&2
+    echo "$message" >&2
+    echo "Re-run with --yes to confirm." >&2
+    return 2
+  fi
+
+  # /dev/tty (or MODULES_CONFIRM_TTY in tests) is intentionally both the
+  # prompt input and output device; it is not a regular data file.
+  # shellcheck disable=SC2094
+  if gum confirm "$message" <"$tty_path" >"$tty_path" 2>"$tty_path"; then
+    return 0
+  fi
+
+  echo "Aborted." >&2
+  return 2
 }
 
 # ── Manifest operations ──────────────────────────────────────
