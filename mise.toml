@@ -25,4 +25,5 @@ lint = [
   "shellcheck",
   "gum-table",
   "caller-pwd-contract",
+  "github-actions",
 ]

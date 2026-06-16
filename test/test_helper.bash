@@ -8,6 +8,14 @@ REPO_DIR="$(cd "$BATS_TEST_DIRNAME/.." && pwd)"
 # points at a different repo.
 eval "$(cd "$REPO_DIR" && mise env)"
 
+# Tests create and commit in many temporary repos, including cloned module repos
+# that do not inherit local fixture git config. Provide a deterministic identity
+# without relying on a developer or CI runner's global git config.
+export GIT_AUTHOR_NAME="${GIT_AUTHOR_NAME:-modules tests}"
+export GIT_AUTHOR_EMAIL="${GIT_AUTHOR_EMAIL:-modules-tests@example.invalid}"
+export GIT_COMMITTER_NAME="${GIT_COMMITTER_NAME:-modules tests}"
+export GIT_COMMITTER_EMAIL="${GIT_COMMITTER_EMAIL:-modules-tests@example.invalid}"
+
 # Run a modules task through mise.
 modules() {
   if [ -z "${MODULES_CALLER_PWD:-}" ]; then
@@ -18,6 +26,12 @@ modules() {
 }
 export -f modules
 
+configure_test_git_identity() {
+  local path="$1"
+  git -C "$path" config user.name "modules tests"
+  git -C "$path" config user.email "modules-tests@example.invalid"
+}
+
 # Create a local "remote" repo with some commits.
 # Usage: create_remote_repo <path>
 # Returns: the path, with a repo containing 2 commits.
@@ -25,6 +39,7 @@ create_remote_repo() {
   local path="$1"
   mkdir -p "$path"
   git -C "$path" init -b main
+  configure_test_git_identity "$path"
   git -C "$path" commit --allow-empty -m "initial commit"
   echo "hello" > "$path/README.md"
   git -C "$path" add README.md
@@ -37,6 +52,7 @@ create_parent_repo() {
   local path="$1"
   mkdir -p "$path"
   git -C "$path" init -b main
+  configure_test_git_identity "$path"
   git -C "$path" commit --allow-empty -m "initial commit"
 }
 
