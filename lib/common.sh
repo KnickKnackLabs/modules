@@ -168,9 +168,11 @@ sync_tracked_branch() {
   fi
 
   if git -C "$mod_path" show-ref --verify --quiet "refs/heads/$branch"; then
-    if ! git -C "$mod_path" checkout -q "$branch" 2>&1; then
-      echo "  $name: failed to checkout local branch '$branch'" >&2
-      return 1
+    if [ "$current_branch" != "$branch" ]; then
+      if ! git -C "$mod_path" checkout -q "$branch" 2>&1; then
+        echo "  $name: failed to checkout local branch '$branch'" >&2
+        return 1
+      fi
     fi
   else
     if ! git -C "$mod_path" checkout -q -b "$branch" --track "origin/$branch" 2>&1; then
