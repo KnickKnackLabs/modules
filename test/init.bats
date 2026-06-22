@@ -117,6 +117,23 @@ setup() {
   [ "$upstream" = "origin/main" ]
 }
 
+@test "init skips checkout hook when tracked clone is already on target branch" {
+  modules add "$REMOTE" --name tracked --track main
+  git -C "$PARENT" commit -m "add tracked module"
+
+  local hook_log="$BATS_TEST_TMPDIR/post-checkout-fired"
+  cat > "$PARENT/modules/tracked/.git/hooks/post-checkout" <<EOF
+#!/usr/bin/env bash
+printf 'post-checkout fired\n' >> "$hook_log"
+EOF
+  chmod +x "$PARENT/modules/tracked/.git/hooks/post-checkout"
+
+  run modules init
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"tracking main"* ]]
+  [ ! -e "$hook_log" ]
+}
+
 @test "init refuses dirty tracked clones" {
   modules add "$REMOTE" --name tracked --track main
 
