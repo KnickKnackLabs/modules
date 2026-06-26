@@ -57,6 +57,47 @@ setup() {
   [ "$actual" = "$pin" ]
 }
 
+@test "init prints pinned status line for pinned modules" {
+  modules add "$REMOTE" --name my-repo
+  git -C "$PARENT" commit -m "add module"
+
+  local pin
+  pin="$(manifest_pin_of "$PARENT/.modules/manifest" "my-repo")"
+
+  # Remove clone so init re-clones and checks out
+  rm -rf "$PARENT/modules/my-repo"
+
+  run modules init
+  [ "$status" -eq 0 ]
+
+  # Should print a pinned status line with the short SHA (not the long advice block)
+  [[ "$output" == *"pinned "* ]]
+  [[ "$output" == *"my-repo"* ]]
+  [[ "$output" != *"Note: switching to"* ]]
+  [[ "$output" != *"detached HEAD"* ]]
+}
+
+@test "init preserves real checkout errors for pinned modules" {
+  modules add "$REMOTE" --name my-repo
+
+  # Use a SHA that doesn't exist in the remote
+  local bad_pin="0000000000000000000000000000000000000000"
+
+  # Replace the pin in the manifest directly via awk (TSV: name<tab>url<tab>pin)
+  local url
+  url="$(manifest_url_of "$PARENT/.modules/manifest" "my-repo")"
+  awk -F'	' -v n="my-repo" -v u="$url" -v p="$bad_pin"     'BEGIN{OFS="	"} $1==n{$3=p} 1'     "$PARENT/.modules/manifest" > "$PARENT/.modules/manifest.tmp"
+  mv "$PARENT/.modules/manifest.tmp" "$PARENT/.modules/manifest"
+  git -C "$PARENT" add .modules/manifest
+  git -C "$PARENT" commit -m "bad pin"
+
+  rm -rf "$PARENT/modules/my-repo"
+
+  run modules init
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"fatal"* || "$output" == *"paths"* || "$output" == *"not a valid object"* ]]
+}
+
 @test "init skips already-cloned untracked modules" {
   modules add "$REMOTE" --name my-repo
 
