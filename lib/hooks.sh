@@ -21,6 +21,12 @@ install_pre_commit_hooks() {
     mkdir -p "$hooks_dst"
     cp "$hooks_src/dispatcher" "$hooks_dst/pre-commit"
     chmod +x "$hooks_dst/pre-commit"
+  elif ! grep -q 'pre-commit\.d' "$hooks_dst/pre-commit" 2>/dev/null; then
+    echo "Warning: existing pre-commit hook at $hooks_dst/pre-commit" >&2
+    echo "         does not dispatch pre-commit.d/. The modules guards were" >&2
+    echo "         installed but may not run until this hook invokes them." >&2
+    echo "  To use the default dispatcher: rm $hooks_dst/pre-commit && mise run install-hooks" >&2
+    echo "  To keep your hook: update it to iterate files in ${hooks_dst}/pre-commit.d/" >&2
   fi
 
   mkdir -p "$hooks_dst/pre-commit.d"
