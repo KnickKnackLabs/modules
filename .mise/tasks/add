@@ -71,7 +71,7 @@ pin="$(git -C "$mod_path" rev-parse HEAD)"
 
 manifest_set "$name" "$url" "$pin" "$track_ref"
 
-git -C "$TARGET_DIR" add "$MANIFEST"
+git -C "$TARGET_DIR" -c advice.addEmbeddedRepo=false add "$MANIFEST"
 
 if [ -n "$track_ref" ]; then
   gum style --foreground 2 "Added module '$name' ($clones_rel/$name @ ${pin:0:12}, tracking $track_ref)"

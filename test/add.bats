@@ -28,6 +28,13 @@ setup() {
   # Readable directory should exist with repo contents
   [ -d "$PARENT/modules/remote/.git" ]
   [ -f "$PARENT/modules/remote/README.md" ]
+
+  # No embedded-repo warning (regression guard for #14).
+  # The original warning was caused by directory git add in the old
+  # hash-based subdirectory layout (pre-opacity redesign). That code
+  # path is gone, but this guard + -c flag in add task together
+  # prevent accidental reintroduction.
+  [[ "$output" != *"embedded git repository"* ]]
 }
 
 @test "add records entry in manifest" {
