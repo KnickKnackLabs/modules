@@ -57,6 +57,51 @@ setup() {
   [ "$actual" = "$pin" ]
 }
 
+@test "init prints pinned status line for pinned modules" {
+  modules add "$REMOTE" --name my-repo
+  git -C "$PARENT" commit -m "add module"
+
+  local pin
+  pin="$(manifest_pin_of "$PARENT/.modules/manifest" "my-repo")"
+
+  # Remove clone so init re-clones and checks out
+  rm -rf "$PARENT/modules/my-repo"
+
+  run modules init
+  [ "$status" -eq 0 ]
+
+  local short_pin="${pin:0:12}"
+  [[ "$output" == *"  my-repo: pinned $short_pin"* ]]
+  [[ "$output" != *"HEAD is now at"* ]]
+  [[ "$output" != *"Note: switching to"* ]]
+  [[ "$output" != *"detached HEAD"* ]]
+}
+
+@test "init preserves real checkout errors for pinned modules" {
+  modules add "$REMOTE" --name my-repo
+
+  # Use a SHA that doesn't exist in the remote
+  local bad_pin="0000000000000000000000000000000000000000"
+
+  local manifest="$PARENT/.modules/manifest"
+  awk -F $'\t' -v name="my-repo" -v pin="$bad_pin" '
+    BEGIN { OFS = "\t" }
+    $1 == name { $3 = pin }
+    { print }
+  ' "$manifest" > "$manifest.tmp"
+  mv "$manifest.tmp" "$manifest"
+  git -C "$PARENT" add .modules/manifest
+  git -C "$PARENT" commit -m "bad pin"
+
+  rm -rf "$PARENT/modules/my-repo"
+
+  run modules init
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"fatal:"* ]]
+  [[ "$output" == *"$bad_pin"* ]]
+  [[ "$output" != *"my-repo: pinned"* ]]
+}
+
 @test "init skips already-cloned untracked modules" {
   modules add "$REMOTE" --name my-repo
 
@@ -80,7 +125,10 @@ setup() {
 
   run modules init
   [ "$status" -eq 0 ]
-  [[ "$output" == *"tracking main"* ]]
+  [[ "$output" == *"  tracked: tracking main @ ${latest:0:12}"* ]]
+  [[ "$output" != *"HEAD is now at"* ]]
+  [[ "$output" != *"Switched to"* ]]
+  [[ "$output" != *"Already on"* ]]
 
   local actual pin_after branch upstream
   actual="$(repo_head "$PARENT/modules/tracked")"
