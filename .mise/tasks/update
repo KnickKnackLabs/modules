@@ -4,6 +4,7 @@
 #USAGE arg "[name]" default="" help="Module name (omit to update all)"
 #USAGE flag "--commit" default=#false help="Commit manifest pin changes after updating"
 #USAGE flag "-y --yes" default=#false help="Skip interactive confirmation"
+#USAGE example "mise run update fold" header="Update one module"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/common.sh"

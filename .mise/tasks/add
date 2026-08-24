@@ -5,6 +5,7 @@
 #USAGE flag "--name <name>" default="" help="Module name (default: derived from URL)"
 #USAGE flag "--ref <ref>" default="" help="Git ref to pin (default: HEAD)"
 #USAGE flag "--track <branch>" default="" help="Track this branch during init/update while retaining a pinned SHA"
+#USAGE example "mise run add https://github.com/org/repo.git --name shared" header="Add a named module"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/common.sh"

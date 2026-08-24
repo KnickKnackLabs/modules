@@ -290,9 +290,15 @@ mise run test`}</CodeBlock>
 
       <Paragraph>
         <Bold>{`${testCount} tests`}</Bold>
-        {` across ${testFiles.length} suites, using `}
-        <Link href="https://github.com/bats-core/bats-core">BATS</Link>
+        {` across ${testFiles.length} suites, using the `}
+        <Link href="https://github.com/KnickKnackLabs/bats-core">KKL BATS fork</Link>
         {". All tests use local git repos in temp directories — no network, no external dependencies."}
+      </Paragraph>
+
+      <Paragraph>
+        {"The public runner uses Rush to schedule isolated tests across and within files with eight jobs. Use "}
+        <Code>mise run test --jobs 1</Code>
+        {" for serial debugging."}
       </Paragraph>
 
       <Paragraph>
@@ -341,7 +347,8 @@ mise run test`}</CodeBlock>
         "│   ├── hooks.bats",
         "│   ├── git-mechanics.bats         # Behavior around gitignored nested repos",
         "│   ├── merge-driver.bats          # Concurrent-edit regression tests",
-        "│   └── roundtrip.bats             # Full setup → lock → clone → unlock → init",
+        "│   ├── roundtrip.bats             # Full setup → lock → clone → unlock → init",
+        "│   └── test-task.bats             # Public runner and concurrency contract",
         "└── mise.toml",
       ].join("\n")}</CodeBlock>
     </Section>
