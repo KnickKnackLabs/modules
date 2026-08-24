@@ -3,6 +3,7 @@
 #MISE dir="{{config_root}}"
 #USAGE arg "<name>" help="Module name to remove"
 #USAGE flag "-y --yes" default=#false help="Skip confirmation"
+#USAGE example "mise run remove old-module --yes" header="Remove without prompting"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/common.sh"

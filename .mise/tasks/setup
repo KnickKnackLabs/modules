@@ -3,6 +3,7 @@
 #MISE dir="{{config_root}}"
 #USAGE flag "--path <path>" default="" help="Clone-root path relative to repo (default: modules)"
 #USAGE flag "--gpg-key <fingerprint>" default="" var=#true help="GPG key fingerprint(s) to add as collaborators"
+#USAGE example "mise run setup --path deps --gpg-key ABC123" header="Initialize a custom clone root with a collaborator"
 set -euo pipefail
 
 source "$MISE_CONFIG_ROOT/lib/common.sh"
@@ -95,7 +96,7 @@ if [ "${#keys[@]}" -gt 0 ]; then
   echo ""
   echo "Adding GPG collaborators..."
 
-  for key in "${keys[@]}"; do
+  for key in ${keys[@]+"${keys[@]}"}; do
     [ -z "$key" ] && continue
     if gpg --list-keys "$key" &>/dev/null; then
       uid=$(gpg --list-keys --with-colons "$key" 2>/dev/null \

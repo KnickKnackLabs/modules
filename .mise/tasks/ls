@@ -2,6 +2,7 @@
 #MISE description="Alias for list"
 #MISE dir="{{config_root}}"
 #USAGE flag "--json" default=#false help="Output as JSON"
+#USAGE example "mise run ls --json" header="List modules as JSON"
 set -euo pipefail
 
 args=()
