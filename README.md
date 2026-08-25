@@ -8,7 +8,7 @@ Manage repo-level dependencies with an encrypted manifest and a gitignored clone
 A public observer sees only 'this repo uses modules' — no names, no pinned commits, no count.
 
 ![lang: bash](https://img.shields.io/badge/lang-bash-4EAA25?style=flat&logo=gnubash&logoColor=white)
-[![tests: 145 passing](https://img.shields.io/badge/tests-145%20passing-brightgreen?style=flat)](test/)
+[![tests: 146 passing](https://img.shields.io/badge/tests-146%20passing-brightgreen?style=flat)](test/)
 ![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=flat)
 
 </div>
@@ -122,7 +122,7 @@ cd modules && mise trust && mise install
 mise run test
 ```
 
-**145 tests** across 14 suites, using the [KKL BATS fork](https://github.com/KnickKnackLabs/bats-core). All tests use local git repos in temp directories — no network, no external dependencies.
+**146 tests** across 14 suites, using the [KKL BATS fork](https://github.com/KnickKnackLabs/bats-core). All tests use local git repos in temp directories — no network, no external dependencies.
 
 The public runner uses Rush to schedule isolated tests across and within files with eight jobs. Use `mise run test --jobs 1` for serial debugging.
 
