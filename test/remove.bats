@@ -33,6 +33,21 @@ setup() {
   [ "$output" = "0" ]
 }
 
+@test "remove last module leaves a non-empty manifest" {
+  modules add "$REMOTE" --name my-repo
+  git -C "$PARENT" commit -m "add module"
+
+  modules remove my-repo --yes
+  git -C "$PARENT" commit -m "remove module"
+
+  [ -s "$PARENT/.modules/manifest" ]
+  run manifest_count_of "$PARENT/.modules/manifest"
+  [ "$output" = "0" ]
+
+  run git -C "$PARENT" diff-files --quiet -- .modules/manifest
+  [ "$status" -eq 0 ]
+}
+
 @test "remove touches only the manifest (no gitlink cleanup needed)" {
   modules add "$REMOTE" --name my-repo
   git -C "$PARENT" commit -m "add module"

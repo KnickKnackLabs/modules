@@ -99,3 +99,32 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"nothing to commit"* ]]
 }
+
+@test "git merge --no-ff works with an empty git-crypt'd manifest" {
+  # A zero-byte worktree file whose blob is not the empty blob (git-crypt
+  # ciphertext has a header) is stat-dirty forever: `git stash create`
+  # exits 1 and `git merge` dies with `fatal: stash failed`.
+  export MODULES_CALLER_PWD="$PARENT"
+  modules setup
+  git -C "$PARENT" commit -m "init modules"
+
+  run git -C "$PARENT" check-attr filter .modules/manifest
+  [[ "$output" == *"git-crypt"* ]]
+  [ -s "$PARENT/.modules/manifest" ]
+
+  run git -C "$PARENT" diff-files --quiet -- .modules/manifest
+  [ "$status" -eq 0 ]
+  run git -C "$PARENT" stash create
+  [ "$status" -eq 0 ]
+
+  git -C "$PARENT" checkout -q -b topic
+  echo "unrelated" > "$PARENT/unrelated.txt"
+  git -C "$PARENT" add unrelated.txt
+  git -C "$PARENT" commit -q -m "unrelated change"
+  git -C "$PARENT" checkout -q main
+
+  run git -C "$PARENT" merge --no-ff --no-edit topic
+  [ "$status" -eq 0 ]
+  run git -C "$PARENT" rev-list --count HEAD
+  [ "$output" = "4" ]
+}
