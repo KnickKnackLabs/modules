@@ -189,6 +189,28 @@ setup() {
   [ "$status" -ne 0 ]
 }
 
+@test "merge: deleting the last entry leaves a non-empty manifest" {
+  modules add "$REMOTE_A" --name alpha
+  git -C "$PARENT" commit -q -m "seed"
+
+  git -C "$PARENT" checkout -q -b branch-a
+  modules remove alpha --yes
+  git -C "$PARENT" commit -q -m "drop alpha"
+
+  git -C "$PARENT" checkout -q main
+  echo "unrelated" > "$PARENT/unrelated.txt"
+  git -C "$PARENT" add unrelated.txt
+  git -C "$PARENT" commit -q -m "unrelated change"
+
+  git -C "$PARENT" merge --no-edit branch-a
+
+  run manifest_count_of "$PARENT/.modules/manifest"
+  [ "$output" = "0" ]
+  [ -s "$PARENT/.modules/manifest" ]
+  run git -C "$PARENT" diff-files --quiet -- .modules/manifest
+  [ "$status" -eq 0 ]
+}
+
 # ── Conflicts ──────────────────────────────────────────────────
 
 # Helper: set a specific pin for a module via a direct manifest edit.
