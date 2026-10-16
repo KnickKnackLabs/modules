@@ -23,7 +23,7 @@ install_pre_commit_hooks() {
     cp "$hooks_src/dispatcher" "$hooks_dst/pre-commit"
     chmod +x "$hooks_dst/pre-commit"
   elif ! grep -q 'pre-commit\.d' "$hooks_dst/pre-commit" 2>/dev/null &&
-    ! grep -qF '${HOOK_NAME}.d' "$hooks_dst/pre-commit" 2>/dev/null; then
+    ! grep -qF "\${HOOK_NAME}.d" "$hooks_dst/pre-commit" 2>/dev/null; then
     preserved_hook="$hooks_dst/pre-commit"
   fi
 

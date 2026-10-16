@@ -150,10 +150,11 @@ if [ -n "${usage_name:-}" ]; then
   update_module "$usage_name"
 else
   failed=0
+  manifest_names_output="$(manifest_names)"
   while IFS= read -r name; do
     [ -z "$name" ] && continue
     update_module "$name" || failed=$((failed + 1))
-  done < <(manifest_names)
+  done <<< "$manifest_names_output"
 
   if [ "$failed" -gt 0 ]; then
     echo "$failed module(s) failed to update" >&2

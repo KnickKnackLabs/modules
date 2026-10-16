@@ -13,6 +13,19 @@ source "$MISE_CONFIG_ROOT/lib/common.sh"
 require_git
 require_initialized
 
+redact_remote_url() {
+  local remote_url="$1"
+
+  case "$remote_url" in
+    *://*@*)
+      printf '%s://%s\n' "${remote_url%%://*}" "${remote_url#*://*@}" # codebase:ignore remote-url-output -- URL userinfo was removed
+      ;;
+    *)
+      printf '%s\n' "$remote_url" # codebase:ignore remote-url-output -- this branch excludes URL userinfo
+      ;;
+  esac
+}
+
 # Populated by mise from the #USAGE arg above.
 # shellcheck disable=SC2154
 url="$usage_url"
@@ -42,9 +55,12 @@ if [ -d "$mod_path" ]; then
   if git -C "$mod_path" rev-parse --git-dir &>/dev/null; then
     if existing_url="$(git -C "$mod_path" remote get-url origin 2>/dev/null)"; then
       if [ "$existing_url" != "$url" ]; then
+        redacted_existing_url="$(redact_remote_url "$existing_url")"
+        redacted_requested_url="$(redact_remote_url "$url")"
+
         echo "Error: clone directory already exists with a different origin: $clones_rel/$name" >&2
-        echo "Existing origin: $existing_url" >&2
-        echo "Requested URL: $url" >&2
+        echo "Existing origin: $redacted_existing_url" >&2
+        echo "Requested URL: $redacted_requested_url" >&2
         echo "Choose another --name or remove the existing directory before retrying." >&2
         exit 1
       fi
