@@ -134,17 +134,20 @@ setup() {
   [[ "$output" == *"already exists"* ]]
 }
 
-@test "add explains a pre-existing clone directory with a mismatched origin" {
+@test "add explains a mismatched origin without exposing credentials" {
   local other_remote="$BATS_TEST_TMPDIR/other-remote"
   create_remote_repo "$other_remote"
 
   git clone "$other_remote" "$PARENT/modules/remote"
+  git -C "$PARENT/modules/remote" remote set-url origin \
+    "https://secret@example.com/other-remote.git"
 
   run modules add "$REMOTE"
   [ "$status" -eq 1 ]
   [[ "$output" == *"different origin"* ]]
-  [[ "$output" == *"Existing origin: $other_remote"* ]]
+  [[ "$output" == *"Existing origin: https://example.com/other-remote.git"* ]]
   [[ "$output" == *"Requested URL: $REMOTE"* ]]
+  [[ "$output" != *"secret"* ]]
 }
 
 @test "add fails with invalid URL" {

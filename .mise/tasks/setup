@@ -84,10 +84,11 @@ fi
 
 keys=()
 if [ -n "${usage_gpg_key:-}" ]; then
+  parsed_keys="$(printf '%s' "${usage_gpg_key}" | xargs printf '%s\n')"
   while IFS= read -r key; do
     [ -z "$key" ] && continue
     keys+=("$key")
-  done < <(printf '%s' "${usage_gpg_key}" | xargs printf '%s\n')
+  done <<< "$parsed_keys"
 fi
 
 added=0

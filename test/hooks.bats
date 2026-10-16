@@ -85,12 +85,15 @@ EOF
   [ -x "$guards_dir/manifest-encryption" ]
 }
 
-@test "setup quiet when preserved pre-commit dispatches pre-commit.d" {
+@test "setup quiet when preserved generic dispatcher derives pre-commit.d" {
   local fresh="$BATS_TEST_TMPDIR/dispatches"
   create_parent_repo "$fresh"
   cat > "$fresh/.git/hooks/pre-commit" <<'DISPATCH'
 #!/usr/bin/env bash
-for hook in "$(dirname "$0")/pre-commit.d"/*; do
+HOOK_NAME="$(basename "$0")"
+HOOK_DIR="$(dirname "$0")/${HOOK_NAME}.d"
+
+for hook in "$HOOK_DIR"/*; do
   [ -x "$hook" ] && "$hook" || exit $?
 done
 DISPATCH
