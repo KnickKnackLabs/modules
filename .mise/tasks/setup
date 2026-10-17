@@ -42,9 +42,9 @@ fi
 
 mkdir -p "$MODULES_DIR"
 
-# Empty manifest: no lines. Touch is enough.
+# Empty manifest: no entries, never zero bytes — see manifest_normalize.
 if [ ! -f "$MANIFEST" ]; then
-  : > "$MANIFEST"
+  manifest_write < /dev/null
 fi
 
 # Config: JSON object with 'path' and 'version'. The version declares the

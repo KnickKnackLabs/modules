@@ -68,6 +68,11 @@ decrypt_if_needed() {
 
 write_success_result() {
   local plaintext="$1"
+  # An empty manifest is one newline, never zero bytes (see
+  # manifest_normalize in common.sh for why).
+  if [ ! -s "$plaintext" ]; then
+    printf '\n' > "$plaintext"
+  fi
   if is_gitcrypt_file "$ANCESTOR" || is_gitcrypt_file "$OURS" || is_gitcrypt_file "$THEIRS"; then
     local ours_dir ours_base cleaned
     ours_dir=$(dirname "$OURS")

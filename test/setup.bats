@@ -15,8 +15,10 @@ setup() {
   run modules setup
   [ "$status" -eq 0 ]
   [ -f "$PARENT/.modules/manifest" ]
-  # Empty manifest = empty file (TSV format, no entries)
-  [ ! -s "$PARENT/.modules/manifest" ]
+  # Empty manifest = no entries, but never zero bytes (see common.sh)
+  [ -s "$PARENT/.modules/manifest" ]
+  run manifest_count_of "$PARENT/.modules/manifest"
+  [ "$output" = "0" ]
 }
 
 @test "setup stages the manifest and gitignore" {

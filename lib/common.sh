@@ -257,6 +257,13 @@ confirm_or_require_yes() {
 # Line-oriented form lets us use a trivial union merge driver (adapted
 # from KnickKnackLabs/notes) for concurrent edits. See
 # lib/manifest-merge-driver.sh.
+#
+# A manifest with no entries is a single newline, never zero bytes. The
+# manifest is git-crypt'd, so its blob is never the empty blob; git treats
+# an index entry whose stat size is 0 against a non-empty blob as
+# unconditionally modified (the racily-smudged heuristic), which makes
+# `git stash create` exit 1 and `git merge` die with `fatal: stash failed`.
+# Every writer goes through manifest_normalize to keep that invariant.
 
 # Print the full manifest to stdout.
 manifest_read() {
@@ -265,12 +272,18 @@ manifest_read() {
   fi
 }
 
+# Normalize manifest lines from stdin: drop blank lines, sort by name, and
+# emit a single newline when nothing remains.
+manifest_normalize() {
+  awk 'NF' | sort -t$'\t' -k1,1 | awk '{ print } END { if (NR == 0) print "" }'
+}
+
 # Write manifest from stdin. Normalizes: deduplicates by name (first wins),
 # sorts alphabetically by name.
 manifest_write() {
   local tmp="${MANIFEST}.tmp"
   # awk: keep first occurrence of each name; then sort by name.
-  awk -F'\t' '!seen[$1]++' | sort -t$'\t' -k1,1 > "$tmp"
+  awk -F'\t' '!seen[$1]++' | manifest_normalize > "$tmp"
   mv "$tmp" "$MANIFEST"
 }
 
@@ -354,7 +367,7 @@ manifest_set() {
     else
       printf '%s\t%s\t%s\n' "$name" "$url" "$pin"
     fi
-  } | sort -t$'\t' -k1,1 > "$tmp"
+  } | manifest_normalize > "$tmp"
   mv "$tmp" "$MANIFEST"
 }
 
@@ -363,7 +376,7 @@ manifest_remove() {
   local name="$1"
   [ -f "$MANIFEST" ] || return 0
   local tmp="${MANIFEST}.tmp"
-  if ! awk -F'\t' -v n="$name" '$1 != n' "$MANIFEST" > "$tmp"; then
+  if ! awk -F'\t' -v n="$name" '$1 != n' "$MANIFEST" | manifest_normalize > "$tmp"; then
     rm -f "$tmp"
     echo "Error: failed to rewrite $MANIFEST while removing '$name'" >&2
     return 1
